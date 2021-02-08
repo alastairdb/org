@@ -81,6 +81,13 @@ block. ~org-babel-latex-preamble~, ~org-babel-latex-begin-env~ and
 the user to specify the preamble and code that preceedes and proceeds
 the contents of the source block.
 
+*** New option ~org-html-meta-tags~ allows for HTML meta tags customization
+
+New variable ~org-html-meta-tags~ makes it possible to customize the
+=<meta>= tags used in an HTML export.  Accepts either a static list of
+values, or a function that generates such a list (see
+~org-html-meta-tags-default~ as an example of the latter).
+
 ** New features
 *** =ob-python= improvements to =:return= header argument 
 
@@ -196,6 +203,13 @@ changed to
                                 :background "chocolate"
                                 :height 0.75)))
 #+end_src
+
+*** Storing ID-links before first heading uses title as description
+
+Storing links to files using ~org-store-link~ (=<C-c l>=) when
+~org-id-link-to-org-use-id~ is not nil will now store the title as
+description of the link, if available.  If no title exists it falls
+back to the filename as before.
 
 * Version 9.4
 ** Incompatible changes
