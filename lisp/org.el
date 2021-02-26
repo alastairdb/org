@@ -1587,7 +1587,7 @@ When this variable is set to t, Org assumes that you write
 outlines by indenting text in each node to align with the
 headline (after the stars).
 
-When this variable is set to 'headline-data, only adapt the
+When this variable is set to `headline-data', only adapt the
 indentation of the data lines right below the headline, such as
 planning/clock lines and property/logbook drawers.
 
@@ -1613,9 +1613,9 @@ time in Emacs."
   :type '(choice
 	  (const :tag "Adapt indentation for all lines" t)
 	  (const :tag "Adapt indentation for headline data lines"
-		 'headline-data)
+		 headline-data)
 	  (const :tag "Do not adapt indentation at all" nil))
-  :safe #'booleanp)
+  :safe (lambda (x) (memq x '(t nil headline-data))))
 
 (defvaralias 'org-special-ctrl-a 'org-special-ctrl-a/e)
 
@@ -7906,7 +7906,7 @@ with the original repeater."
 		"")))			;No time shift
 	 (doshift
 	  (and (org-string-nw-p shift)
-	       (or (string-match "\\`[ \t]*\\([+-]?[0-9]+\\)\\([dwmy]\\)[ \t]*\\'"
+	       (or (string-match "\\`[ \t]*\\([+-]?[0-9]+\\)\\([hdwmy]\\)[ \t]*\\'"
 				 shift)
 		   (user-error "Invalid shift specification %s" shift)))))
     (goto-char end-of-tree)
@@ -7916,6 +7916,7 @@ with the original repeater."
 	   (shift-n (and doshift (string-to-number (match-string 1 shift))))
 	   (shift-what (pcase (and doshift (match-string 2 shift))
 			 (`nil nil)
+			 ("h" 'hour)
 			 ("d" 'day)
 			 ("w" (setq shift-n (* 7 shift-n)) 'day)
 			 ("m" 'month)
