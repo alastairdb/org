@@ -7,6 +7,7 @@
 ;; Maintainer: Bastien Guerry <bzg@gnu.org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 ;; Homepage: https://orgmode.org
+;; Package-Requires: ((emacs "24.3"))
 
 ;; Version: 9.5-dev
 
@@ -144,7 +145,6 @@ Stars are put in group 1 and the trimmed body in group 2.")
 (declare-function org-clock-timestamps-down "org-clock" (&optional n))
 (declare-function org-clock-timestamps-up "org-clock" (&optional n))
 (declare-function org-clock-update-time-maybe "org-clock" ())
-(declare-function org-clocking-buffer "org-clock" ())
 (declare-function org-clocktable-shift "org-clock" (dir n))
 (declare-function org-columns-quit "org-colview" ())
 (declare-function org-columns-insert-dblock "org-colview" ())
@@ -3828,10 +3828,11 @@ This is needed for font-lock setup.")
   "Marker recording the last clock-in, but the headline position.")
 (defvar org-clock-heading ""
   "The heading of the current clock entry.")
-(defun org-clock-is-active ()
+(defun org-clocking-buffer ()
   "Return the buffer where the clock is currently running.
 Return nil if no clock is running."
   (marker-buffer org-clock-marker))
+(defalias 'org-clock-is-active #'org-clocking-buffer)
 
 (defun org-check-running-clock ()
   "Check if the current buffer contains the running clock.
@@ -4767,8 +4768,8 @@ This is for getting out of special buffers like capture.")
 ;; Other stuff we need.
 (require 'time-date)
 (unless (fboundp 'time-subtract) (defalias 'time-subtract 'subtract-time))
-(require 'easymenu)
-(require 'overlay)
+(when (< emacs-major-version 28)  ; preloaded in Emacs 28
+  (require 'easymenu))
 
 (require 'org-entities)
 (require 'org-faces)
@@ -5855,7 +5856,7 @@ If TAG is a number, get the corresponding match group."
 
 (defun org-font-lock-add-priority-faces (limit)
   "Add the special priority faces."
-  (while (re-search-forward org-priority-regexp limit t)
+  (while (re-search-forward (concat "^\\*+" org-priority-regexp) limit t)
     (let ((beg (match-beginning 1))
 	  (end (1+ (match-end 2))))
       (add-face-text-property
@@ -8254,7 +8255,7 @@ function is being called interactively."
 	     ;; The clock marker is lost when using `sort-subr'; mark
 	     ;; the clock with temporary `:org-clock-marker-backup'
 	     ;; text property.
-	     (when (and (eq (org-clock-is-active) (current-buffer))
+	     (when (and (eq (org-clocking-buffer) (current-buffer))
 			(<= start (marker-position org-clock-marker))
 			(>= end (marker-position org-clock-marker)))
 	       (with-silent-modifications
@@ -20358,7 +20359,7 @@ unless optional argument NO-INHERITANCE is non-nil."
 
 (defun org-point-at-end-of-empty-headline ()
   "If point is at the end of an empty headline, return t, else nil.
-If the heading only contains a TODO keyword, it is still still considered
+If the heading only contains a TODO keyword, it is still considered
 empty."
   (let ((case-fold-search nil))
     (and (looking-at "[ \t]*$")
