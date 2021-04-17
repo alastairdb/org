@@ -101,6 +101,10 @@ that asks whether to clock out and save when there's a running clock.
 Customize ~org-clock-ask-before-exiting~~ to nil to disable this new
 behavior.
 
+*** Option ~org-html-inline-image-rules~ now includes .webp
+
+By default ox-html now inlines webp images.
+
 ** New features
 *** =ob-python= improvements to =:return= header argument 
 
@@ -177,6 +181,8 @@ global list (~org-tag-alist~ and ~org-tag-persistent-alist~).  Now
 option ~org-complete-tags-always-offer-all-agenda-tags~ is honored.
 
 ** Miscellaneous
+*** Missing or empty placeholders in "eval" macros are now nil
+They used to be the empty string.
 *** =org-goto-first-child= now works before first heading
 
 When point is before first heading =org-goto-first-child= will move
@@ -315,6 +321,40 @@ Also, ~org-startup-folded~ now defaults to ~showeverything~.
 
 ** New features
 
+*** =RET= and =C-j= now obey ~electric-indent-mode~
+
+Since Emacs 24.4, ~electric-indent-mode~ is enabled by default.  In
+most major modes, this causes =RET= to reindent the current line and
+indent the new line, and =C-j= to insert a newline without indenting.
+
+Org mode now obeys this minor mode: when ~electric-indent-mode~ is
+enabled, and point is neither in a table nor on a timestamp or a link:
+
+- =RET= (bound to ~org-return~) reindents the current line and indents
+  the new line;
+- =C-j= (bound to the new command ~org-return-and-maybe-indent~)
+  merely inserts a newline.
+
+To get the previous behaviour back, disable ~electric-indent-mode~
+explicitly:
+
+#+begin_src emacs-lisp
+(add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
+#+end_src
+
+Alternatively, if you wish to keep =RET= as the "smart-return" key,
+but dislike Org's default indentation of sections, you may prefer to
+customize ~org-adapt-indentation~ to either =nil= or =headline-data=.
+
+*** New allowed value for ~org-adapt-indentation~
+
+~org-adapt-indentation~ now accepts a new value, =headline-data=.
+
+When set to this value, Org will only adapt indentation of headline
+data lines, such as planning/clock lines and property/logbook drawers.
+Also, with this setting, =org-indent-mode= will keep these data lines
+correctly aligned with the headline above.
+
 *** Looping agenda commands over headlines
 
 ~org-agenda-loop-over-headlines-in-active-region~ allows you to loop
@@ -347,15 +387,6 @@ call ~org-toggle-radio-button~.
 
 You can also add =#+ATTR_ORG: :radio t= right before the list to tell
 Org to use radio buttons for this list only.
-
-*** New allowed value for ~org-adapt-indentation~
-
-~org-adapt-indentation~ now accepts a new value, ='headline-data=.
-
-When set to this value, Org will only adapt indentation of headline
-data lines, such as planning/clock lines and property/logbook drawers.
-Also, with this setting, =org-indent-mode= will keep these data lines
-correctly aligned with the headline above.
 
 *** Numeric priorities are now allowed (up to 65)
 
@@ -425,31 +456,6 @@ can now be inserted with this prefix argument.
 
 Source code block header argument =:file-mode= can set file
 permissions if =:file= argument is provided.
-
-*** =RET= and =C-j= now obey ~electric-indent-mode~
-
-Since Emacs 24.4, ~electric-indent-mode~ is enabled by default.  In
-most major modes, this causes =RET= to reindent the current line and
-indent the new line, and =C-j= to insert a newline without indenting.
-
-Org mode now obeys this minor mode: when ~electric-indent-mode~ is
-enabled, and point is neither in a table nor on a timestamp or a link:
-
-- =RET= (bound to ~org-return~) reindents the current line and indents
-  the new line;
-- =C-j= (bound to the new command ~org-return-and-maybe-indent~)
-  merely inserts a newline.
-
-To get the previous behaviour back, disable ~electric-indent-mode~
-explicitly:
-
-#+begin_src emacs-lisp
-(add-hook 'org-mode-hook (lambda () (electric-indent-local-mode -1)))
-#+end_src
-
-Alternatively, if you wish to keep =RET= as the "smart-return" key,
-but dislike Org's default indentation of sections, you may prefer to
-customize ~org-adapt-indentation~ to either =nil= or ='headline-data=.
 
 *** =ob-C.el= allows the inclusion of non-system header files
 
@@ -4484,8 +4490,8 @@ found here: https://orgmode.org/worg/org-tutorials/org-outside-org.html
 
 Here are two screencasts demonstrating Thorsten's tools:
 
-- [[http://youtu.be/nqE6YxlY0rw]["Modern conventions for Emacs Lisp files"]]
-- [[http://www.youtube.com/watch?v%3DII-xYw5VGFM][Exploring Bernt Hansen's Org-mode tutorial with 'navi-mode']]
+- [[https://youtu.be/nqE6YxlY0rw]["Modern conventions for Emacs Lisp files"]]
+- [[https://www.youtube.com/watch?v%3DII-xYw5VGFM][Exploring Bernt Hansen's Org-mode tutorial with 'navi-mode']]
 
 *** MobileOrg for iOS
 

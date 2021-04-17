@@ -15,7 +15,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Code:
 
@@ -313,6 +313,9 @@ This is not a node property
   "Test `org-lint-unknown-options-item' checker."
   (should
    (org-test-with-temp-text "#+options: foobarbaz:t"
+     (org-lint '(unknown-options-item))))
+  (should
+   (org-test-with-temp-text "#+options: H:"
      (org-lint '(unknown-options-item)))))
 
 (ert-deftest test-org-lint/invalid-macro-argument-and-template ()

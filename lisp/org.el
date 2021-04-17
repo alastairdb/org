@@ -4804,6 +4804,7 @@ The following commands are available:
   (org-load-modules-maybe)
   (org-install-agenda-files-menu)
   (when org-link-descriptive (add-to-invisibility-spec '(org-link)))
+  (make-local-variable 'org-link-descriptive)
   (add-to-invisibility-spec '(org-hide-block . t))
   (setq-local outline-regexp org-outline-regexp)
   (setq-local outline-level 'org-outline-level)
@@ -5502,6 +5503,8 @@ highlighting was done, nil otherwise."
 	(while (and (< (point) limit)
 		    (re-search-forward org-latex-and-related-regexp nil t))
 	  (cond
+           ((>= (match-beginning 0) limit)
+	    (throw 'found nil))
 	   ((cl-some (lambda (f)
 		       (memq f '(org-code org-verbatim underline
 					  org-special-keyword)))
@@ -8768,7 +8771,21 @@ If the file does not exist, throw an error."
 
       (save-window-excursion
 	(message "Running %s...done" cmd)
-	(start-process-shell-command cmd nil cmd)
+        ;; Handlers such as "gio open" and kde-open5 start viewer in background
+        ;; and exit immediately.  Avoid `start-process' since it assumes
+        ;; :connection-type 'pty and kills children processes with SIGHUP
+        ;; when temporary terminal session is finished.
+        (make-process
+         :name "org-open-file" :connection-type 'pipe :noquery t
+         :buffer nil ; use "*Messages*" for debugging
+         :sentinel (lambda (proc event)
+                     (when (and (memq (process-status proc) '(exit signal))
+                                (/= (process-exit-status proc) 0))
+                       (message
+                        "Command %s: %s."
+                        (mapconcat #'identity (process-command proc) " ")
+                        (substring event 0 -1))))
+         :command (list shell-file-name shell-command-switch cmd))
 	(and (boundp 'org-wait) (numberp org-wait) (sit-for org-wait))))
      ((or (stringp cmd)
 	  (eq cmd 'emacs))

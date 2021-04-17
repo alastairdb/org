@@ -1386,11 +1386,13 @@ e.g., `org-export-create-backend'.  It specifies which back-end
 specific items to read, if any."
   (let ((line
 	 (let ((s 0) alist)
-	   (while (string-match "\\(.+?\\):\\((.*?)\\|\\S-*\\)[ \t]*" options s)
+	   (while (string-match "\\(.+?\\):\\((.*?)\\|\\S-+\\)?[ \t]*" options s)
 	     (setq s (match-end 0))
-	     (push (cons (match-string 1 options)
-			 (read (match-string 2 options)))
-		   alist))
+	     (let ((value (match-string 2 options)))
+               (when value
+                 (push (cons (match-string 1 options)
+                             (read value))
+		       alist))))
 	   alist))
 	;; Priority is given to back-end specific options.
 	(all (append (org-export-get-all-options backend)
@@ -2947,10 +2949,8 @@ Return code as a string."
 			     (org-export-backend-name backend))
 	 (org-export-expand-include-keyword)
 	 (org-export--delete-comment-trees)
-	 (org-macro-initialize-templates)
-	 (org-macro-replace-all (append org-macro-templates
-					org-export-global-macros)
-				parsed-keywords)
+	 (org-macro-initialize-templates org-export-global-macros)
+	 (org-macro-replace-all org-macro-templates parsed-keywords)
 	 ;; Refresh buffer properties and radio targets after previous
 	 ;; potentially invasive changes.
 	 (org-set-regexps-and-options)
@@ -3115,7 +3115,7 @@ locally for the subtree through node properties."
     (when options
       (let ((items
 	     (mapcar
-	      #'(lambda (opt) (format "%s:%S" (car opt) (cdr opt)))
+              (lambda (opt) (format "%s:%S" (car opt) (cdr opt)))
 	      (sort options (lambda (k1 k2) (string< (car k1) (car k2)))))))
 	(if subtreep
 	    (org-entry-put
@@ -5483,7 +5483,7 @@ transcoding it."
      (apostrophe :utf-8 "’" :html "&rsquo;"))
     ("ru"
      ;; https://ru.wikipedia.org/wiki/%D0%9A%D0%B0%D0%B2%D1%8B%D1%87%D0%BA%D0%B8#.D0.9A.D0.B0.D0.B2.D1.8B.D1.87.D0.BA.D0.B8.2C_.D0.B8.D1.81.D0.BF.D0.BE.D0.BB.D1.8C.D0.B7.D1.83.D0.B5.D0.BC.D1.8B.D0.B5_.D0.B2_.D1.80.D1.83.D1.81.D1.81.D0.BA.D0.BE.D0.BC_.D1.8F.D0.B7.D1.8B.D0.BA.D0.B5
-     ;; http://www.artlebedev.ru/kovodstvo/sections/104/
+     ;; https://www.artlebedev.ru/kovodstvo/sections/104/
      (primary-opening :utf-8 "«" :html "&laquo;" :latex "{}<<"
 		      :texinfo "@guillemetleft{}")
      (primary-closing :utf-8 "»" :html "&raquo;" :latex ">>{}"

@@ -653,9 +653,6 @@ The function must accept two parameters:
 
 The function should return the string to be exported.
 
-For example, the variable could be set to the following function
-in order to mimic default behavior:
-
 The default value simply returns the value of CONTENTS."
   :group 'org-export-html
   :version "24.4"
@@ -848,16 +845,15 @@ link to the image."
   :type 'boolean)
 
 (defcustom org-html-inline-image-rules
-  `(("file" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg")))
-    ("http" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg")))
-    ("https" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg"))))
+  `(("file" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg" ".webp")))
+    ("http" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg" ".webp")))
+    ("https" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg" ".webp"))))
   "Rules characterizing image files that can be inlined into HTML.
 A rule consists in an association whose key is the type of link
 to consider, and value is a regexp that will be matched against
 link's path."
   :group 'org-export-html
-  :version "24.4"
-  :package-version '(Org . "8.0")
+  :package-version '(Org . "9.5")
   :type '(alist :key-type (string :tag "Type")
 		:value-type (regexp :tag "Path")))
 
@@ -1192,7 +1188,7 @@ You can also customize this for each buffer, using something like
 
 For further information about MathJax options, see the MathJax documentation:
 
-  http://docs.mathjax.org/"
+  https://docs.mathjax.org/"
   :group 'org-export-html
   :package-version '(Org . "8.3")
   :type '(list :greedy t
