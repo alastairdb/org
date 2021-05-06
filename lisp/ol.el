@@ -1325,11 +1325,27 @@ PATH is the sexp to evaluate, as a string."
   "Open a \"help\" type link.
 PATH is a symbol name, as a string."
   (pcase (intern path)
-    ((and (pred fboundp) variable) (describe-function variable))
-    ((and (pred boundp) function) (describe-variable function))
+    ((and (pred fboundp) function) (describe-function function))
+    ((and (pred boundp) variable) (describe-variable variable))
     (name (user-error "Unknown function or variable: %s" name))))
 
-(org-link-set-parameters "help" :follow #'org-link--open-help)
+(defun org-link--store-help ()
+  "Store \"help\" type link."
+  (when (eq major-mode 'help-mode)
+    (let ((symbol
+           (save-excursion
+	     (goto-char (point-min))
+             ;; In case the help is about the key-binding, store the
+             ;; function instead.
+             (search-forward "runs the command " (line-end-position) t)
+             (read (current-buffer)))))
+      (org-link-store-props :type "help"
+                            :link (format "help:%s" symbol)
+                            :description nil))))
+
+(org-link-set-parameters "help"
+                         :follow #'org-link--open-help
+                         :store #'org-link--store-help)
 
 ;;;; "http", "https", "mailto", "ftp", and "news" link types
 (dolist (scheme '("ftp" "http" "https" "mailto" "news"))
@@ -1487,8 +1503,11 @@ non-nil."
 			       results-alist)))
 		  t))))
 	(setq link (plist-get org-store-link-plist :link))
-	(setq desc (or (plist-get org-store-link-plist :description)
-		       link)))
+        ;; If store function actually set `:description' property, use
+        ;; it, even if it is nil.  Otherwise, fallback to link value.
+	(setq desc (if (plist-member org-store-link-plist :description)
+                       (plist-get org-store-link-plist :description)
+		     link)))
 
        ;; Store a link from a remote editing buffer.
        ((org-src-edit-buffer-p)
@@ -1546,19 +1565,6 @@ non-nil."
 			      nil nil nil))))
 	  (org-link-store-props :type "calendar" :date cd)))
 
-       ((eq major-mode 'help-mode)
-	(let ((symbol (replace-regexp-in-string
-		       ;; Help mode escapes backquotes and backslashes
-		       ;; before displaying them.  E.g., "`" appears
-		       ;; as "\'" for reasons.  Work around this.
-		       (rx "\\" (group (or "`" "\\"))) "\\1"
-		       (save-excursion
-			 (goto-char (point-min))
-			 (looking-at "^[^ ]+")
-			 (match-string 0)))))
-	  (setq link (concat "help:" symbol)))
-	(org-link-store-props :type "help"))
-
        ((eq major-mode 'w3-mode)
 	(setq cpltxt (if (and (buffer-name)
 			      (not (string-match "Untitled" (buffer-name))))
@@ -1592,9 +1598,8 @@ non-nil."
 
        ((and (buffer-file-name (buffer-base-buffer)) (derived-mode-p 'org-mode))
 	(org-with-limited-levels
-	 (setq custom-id (org-entry-get nil "CUSTOM_ID"))
-	 (cond
-	  ;; Store a link using the target at point
+         (cond
+	  ;; Store a link using the target at point.
 	  ((org-in-regexp "[^<]<<\\([^<>]+\\)>>[^>]" 1)
 	   (setq cpltxt
 		 (concat "file:"
@@ -1602,6 +1607,15 @@ non-nil."
 			  (buffer-file-name (buffer-base-buffer)))
 			 "::" (match-string 1))
 		 link cpltxt))
+          ;; Store a link using the CUSTOM_ID property.
+          ((setq custom-id (org-entry-get nil "CUSTOM_ID"))
+           (setq cpltxt
+		 (concat "file:"
+			 (abbreviate-file-name
+			  (buffer-file-name (buffer-base-buffer)))
+			 "::#" custom-id)
+		 link cpltxt))
+          ;; Store a link using (and perhaps creating) the ID property.
 	  ((and (featurep 'org-id)
 		(or (eq org-id-link-to-org-use-id t)
 		    (and interactive?
@@ -1610,14 +1624,13 @@ non-nil."
 				      'create-if-interactive-and-no-custom-id)
 				  (not custom-id))))
 		    (and org-id-link-to-org-use-id (org-entry-get nil "ID"))))
-	   ;; Store a link using the ID at point
 	   (setq link (condition-case nil
 			  (prog1 (org-id-store-link)
 			    (setq desc (or (plist-get org-store-link-plist
 						      :description)
 					   "")))
 			(error
-			 ;; Probably before first headline, link only to file
+			 ;; Probably before first headline, link only to file.
 			 (concat "file:"
 				 (abbreviate-file-name
 				  (buffer-file-name (buffer-base-buffer))))))))

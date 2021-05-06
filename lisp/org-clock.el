@@ -438,12 +438,11 @@ specifications than `frame-title-format', which see."
 (defcustom org-clock-x11idle-program-name "x11idle"
   "Name of the program which prints X11 idle time in milliseconds.
 
-You can find x11idle.c in the contrib/scripts directory of the
-Org git distribution. Or, you can do:
+you can do \"~$ sudo apt-get install xprintidle\" if you are using
+a Debian-based distribution.
 
-    sudo apt-get install xprintidle
-
-if you are using Debian."
+Alternatively, can find x11idle.c in the org-contrib repository at
+https://git.sr.ht/~bzg/org-contrib"
   :group 'org-clock
   :version "24.4"
   :package-version '(Org . "8.0")
@@ -2702,7 +2701,18 @@ from the dynamic block definition."
 	     (format (concat "| %s %s | %s%s%s"
 			     (format org-clock-file-time-cell-format
 				     (org-clock--translate "File time" lang))
-			     " | *%s*|\n")
+
+			     ;; The file-time rollup value goes in the first time
+			     ;; column (of which there is always at least one)...
+			     " | *%s*|"
+			     ;; ...and the remaining file time cols (if any) are blank.
+			     (make-string (max 0 (1- time-columns)) ?|)
+
+			     ;; Optionally show the percentage contribution of "this"
+			     ;; file time to the total time.
+			     (if (eq formula '%) " %s |" "")
+			     "\n")
+
 		     (file-name-nondirectory file-name)
 		     (if level?    "| " "") ;level column, maybe
 		     (if timestamp "| " "") ;timestamp column, maybe
@@ -2710,7 +2720,12 @@ from the dynamic block definition."
 		     (if properties	    ;properties columns, maybe
 			 (make-string (length properties) ?|)
 		       "")
-		     (org-duration-from-minutes file-time)))) ;time
+		     (org-duration-from-minutes file-time) ;time
+
+		     (cond ((not (eq formula '%)) "")	   ;time percentage, maybe
+			   ((or (not total-time) (= total-time 0)) "0.0")
+			   (t
+			    (format "%.1f" (* 100 (/ file-time (float total-time)))))))))
 
 	  ;; Get the list of node entries and iterate over it
 	  (when (> maxlevel 0)

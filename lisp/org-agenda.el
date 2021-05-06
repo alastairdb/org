@@ -3984,7 +3984,7 @@ agenda display, configure `org-agenda-finalize-hook'."
 		  (put-text-property (point-at-bol) (point-at-eol)
 				     'tags
 				     (org-with-point-at mrk
-				       (mapcar #'downcase (org-get-tags)))))))))
+				       (org-get-tags))))))))
 	(setq org-agenda-represented-tags nil
 	      org-agenda-represented-categories nil)
 	(when org-agenda-top-headline-filter
@@ -6813,8 +6813,8 @@ Any match of REMOVE-RE will be removed from TXT."
 	(remove-text-properties 0 (length rtn) '(line-prefix t wrap-prefix t) rtn)
 	(org-add-props rtn nil
 	  'org-category category
-	  'tags (mapcar #'org-downcase-keep-props tags)
-	  'org-priority-highest org-priority-highest
+          'tags tags
+          'org-priority-highest org-priority-highest
 	  'org-priority-lowest org-priority-lowest
 	  'time-of-day time-of-day
 	  'duration duration
@@ -6857,12 +6857,6 @@ The modified list may contain inherited tags, and tags matched by
 			   tags ":")
 			  (if have-i "::" ":"))))))
   txt)
-
-(defun org-downcase-keep-props (s)
-  (let ((props (text-properties-at 0 s)))
-    (setq s (downcase s))
-    (add-text-properties 0 (length s) props s)
-    s))
 
 (defvar org-agenda-sorting-strategy) ;; because the def is in a let form
 
@@ -6927,7 +6921,7 @@ and stored in the variable `org-prefix-format-compiled'."
 	    (t "  %-12:c%?-12t% s")))
 	(start 0)
 	varform vars var c f opt) ;; e
-    (while (string-match "%\\(\\?\\)?\\([-+]?[0-9.]*\\)\\([ .;,:!?=|/<>]?\\)\\([cltseib]\\|(.+)\\)"
+    (while (string-match "%\\(\\?\\)?\\([-+]?[0-9.]*\\)\\([ .;,:!?=|/<>]?\\)\\([cltseib]\\|(.+?)\\)"
 			 s start)
       (setq var (or (cdr (assoc (match-string 4 s)
 				'(("c" . category) ("t" . time) ("l" . level) ("s" . extra)
@@ -7854,8 +7848,8 @@ the variable `org-agenda-auto-exclude-function'."
 	  (setq s (replace-regexp-in-string ; Remove the temporary special string.
 		   "~~~" "-" (match-string 3 f-string)))
 	  (cond
-	   ((member (downcase s) tag-list)
-	    (org-pushnew-to-end (concat pm (downcase s)) ft))
+	   ((member s tag-list)
+	    (org-pushnew-to-end (concat pm s) ft))
 	   ((member s category-list)
 	    (org-pushnew-to-end (concat pm ; Remove temporary double quotes.
 				        (replace-regexp-in-string "\"\\(.*\\)\"" "\\1" s))
@@ -8055,8 +8049,8 @@ These will be lower-case, for filtering."
 	  (dolist (tag tags-lists)
 	    (mapc
 	     (lambda (group)
-	       (when (member tag (mapcar #'downcase group))
-		 (push (downcase (car group)) tags-lists)))
+	       (when (member tag group)
+		 (push (car group) tags-lists)))
 	     org-tag-groups-alist-for-agenda))
 	  (setq org-agenda-represented-tags tags-lists)))))
 
@@ -8130,7 +8124,7 @@ function to set the right switches in the returned form."
 		 ((and (string-match-p "\\`{" tag) (string-match-p "}\\'" tag))
 		  ;; TAG is a regexp.
 		  (list 'org-match-any-p (substring tag 1 -1) 'tags))
-		 (t (list 'member (downcase tag) 'tags)))))
+		 (t (list 'member tag 'tags)))))
 	(push (if (eq op ?-) (list 'not f) f) form)))))
 
 (defun org-agenda-filter-effort-form (e)
@@ -8161,7 +8155,7 @@ If the line does not have an effort defined, return nil."
 When NO-OPERATOR is non-nil, do not add the + operator to
 returned tags."
   (if org-group-tags
-      (let ((case-fold-search t) rtn)
+      (let (case-fold-search rtn)
 	(mapc
 	 (lambda (f)
 	   (let (f0 dir)
@@ -8169,7 +8163,7 @@ returned tags."
 		 (setq dir (match-string 1 f) f0 (match-string 2 f))
 	       (setq dir (if no-operator "" "+") f0 f))
 	     (setq rtn (append (mapcar (lambda(f1) (concat dir f1))
-				       (org-tags-expand f0 t t))
+				       (org-tags-expand f0 t))
 			       rtn))))
 	 filter)
 	(reverse rtn))
@@ -8405,7 +8399,8 @@ When optional argument BACKWARD is set, go backward."
 With prefix ARG, go forward that many times the current span."
   (interactive "p")
   (org-agenda-check-type t 'agenda)
-  (let* ((args (get-text-property (min (1- (point-max)) (point)) 'org-last-args))
+  (let* ((wstart (window-start))
+         (args (get-text-property (min (1- (point-max)) (point)) 'org-last-args))
 	 (span (or (nth 2 args) org-agenda-current-span))
 	 (sd (or (nth 1 args) (org-get-at-bol 'day) org-starting-day))
 	 (greg (calendar-gregorian-from-absolute sd))
@@ -8438,7 +8433,8 @@ With prefix ARG, go forward that many times the current span."
 	  (org-agenda-overriding-arguments
 	   (list (car args) sd span)))
       (org-agenda-redo)
-      (org-agenda-find-same-or-today-or-agenda cnt))))
+      (org-agenda-find-same-or-today-or-agenda cnt))
+    (set-window-start nil wstart)))
 
 (defun org-agenda-earlier (arg)
   "Go backward in time by the current span.
@@ -9576,33 +9572,35 @@ current line."
 
 (defun org-agenda-priority (&optional force-direction)
   "Set the priority of line at point, also in Org file.
-This changes the line at point, all other lines in the agenda referring to
-the same tree node, and the headline of the tree node in the Org file.
-Called with a universal prefix arg, show the priority instead of setting it."
+This changes the line at point, all other lines in the agenda
+referring to the same tree node, and the headline of the tree
+node in the Org file.
+
+Called with one universal prefix arg, show the priority instead
+of setting it.
+
+When called programmatically, FORCE-DIRECTION can be `set', `up',
+`down', or a character."
   (interactive "P")
-  (if (equal force-direction '(4))
-      (org-priority-show)
-    (unless org-priority-enable-commands
-      (user-error "Priority commands are disabled"))
-    (org-agenda-check-no-diary)
-    (let* ((col (current-column))
-	   ;; (marker (or (org-get-at-bol 'org-marker)
-	   ;;             (org-agenda-error)))
-	   (hdmarker (org-get-at-bol 'org-hd-marker))
-	   (buffer (marker-buffer hdmarker))
-	   (pos (marker-position hdmarker))
-	   (inhibit-read-only t)
-	   newhead)
-      (org-with-remote-undo buffer
-	(with-current-buffer buffer
-	  (widen)
-	  (goto-char pos)
-	  (org-show-context 'agenda)
-	  (org-priority force-direction)
-	  (end-of-line 1)
-	  (setq newhead (org-get-heading)))
-	(org-agenda-change-all-lines newhead hdmarker)
-	(org-move-to-column col)))))
+  (unless org-priority-enable-commands
+    (user-error "Priority commands are disabled"))
+  (org-agenda-check-no-diary)
+  (let* ((col (current-column))
+	 (hdmarker (org-get-at-bol 'org-hd-marker))
+	 (buffer (marker-buffer hdmarker))
+	 (pos (marker-position hdmarker))
+	 (inhibit-read-only t)
+	 newhead)
+    (org-with-remote-undo buffer
+      (with-current-buffer buffer
+	(widen)
+	(goto-char pos)
+	(org-show-context 'agenda)
+	(org-priority force-direction)
+	(end-of-line 1)
+	(setq newhead (org-get-heading)))
+      (org-agenda-change-all-lines newhead hdmarker)
+      (org-move-to-column col))))
 
 ;; FIXME: should fix the tags property of the agenda line.
 (defun org-agenda-set-tags (&optional tag onoff)
@@ -9802,7 +9800,12 @@ Called with a universal prefix arg, show the priority instead of setting it."
 				  (line-end-position)
 				  '(display nil))
 	  (org-move-to-column
-	   (- (/ (window-width nil t) (window-font-width)) (length stamp)) t)
+           (- (if (fboundp 'window-font-width)
+                  (/ (window-width nil t) (window-font-width))
+                ;; Fall back to pre-9.3.3 behavior on Emacs <25.
+                (window-width))
+              (length stamp))
+           t)
           (add-text-properties
 	   (1- (point)) (point-at-eol)
 	   (list 'display (org-add-props stamp nil

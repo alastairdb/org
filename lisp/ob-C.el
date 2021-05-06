@@ -258,7 +258,14 @@ its header arguments."
 		(when colnames
 		  (org-babel-C-utility-header-to-C))
 		;; tables headers
-		(mapconcat 'org-babel-C-header-to-C colnames "\n")
+		(mapconcat (lambda (head)
+                             (let* ((tblnm (car head))
+                                    (tbl (cdr (car (let* ((el vars))
+                                                     (while (not (or (equal tblnm (caar el)) (not el)))
+                                                       (setq el (cdr el)))
+                                                     el))))
+                                    (type (org-babel-C-val-to-base-type tbl)))
+                               (org-babel-C-header-to-C head type))) colnames "\n")
 		;; body
 		(if main-p
 		    (org-babel-C-ensure-main-wrap body)
@@ -290,7 +297,14 @@ its header arguments."
 		(when colnames
 		  (org-babel-C-utility-header-to-C))
 		;; tables headers
-		(mapconcat 'org-babel-C-header-to-C colnames "\n")
+		(mapconcat (lambda (head)
+                             (let* ((tblnm (car head))
+                                    (tbl (cdr (car (let* ((el vars))
+                                                     (while (not (or (equal tblnm (caar el)) (not el)))
+                                                       (setq el (cdr el)))
+                                                     el))))
+                                    (type (org-babel-C-val-to-base-type tbl)))
+                               (org-babel-C-header-to-C head type))) colnames "\n")
 		;; body
 		(if main-p
 		    (org-babel-C-ensure-main-wrap body)
@@ -342,7 +356,9 @@ FORMAT can be either a format string or a function which is called with VAL."
       `(,(car type)
 	(lambda (val)
 	  (cons
-	   (format "[%d][%d]" (length val) (length (car val)))
+           (pcase org-babel-c-variant
+             ((or `c `cpp) (format "[%d][%d]" (length val) (length (car val))))
+             (`d           (format "[%d][%d]" (length (car val)) (length val))))
 	   (concat
 	    (if (eq org-babel-c-variant 'd) "[\n" "{\n")
 	    (mapconcat
@@ -403,11 +419,19 @@ of the same value."
 	   (formatted (org-babel-C-format-val type-data val))
 	   (suffix (car formatted))
 	   (data (cdr formatted)))
-      (format "%s %s%s = %s;"
-	      type
-	      var
-	      suffix
-	      data))))
+      (pcase org-babel-c-variant
+        ((or `c `cpp)
+         (format "%s %s%s = %s;"
+	         type
+	         var
+	         suffix
+	         data))
+        (`d
+         (format "%s%s %s = %s;"
+	         type
+	         suffix
+	         var
+	         data))))))
 
 (defun org-babel-C-table-sizes-to-C (pair)
   "Create constants of table dimensions, if PAIR is a table."
@@ -427,10 +451,10 @@ into a column number."
   (pcase org-babel-c-variant
     ((or `c `cpp)
      (concat
-      (if (eq org-babel-c-variant 'c)
-          "extern "
-	"extern \"C\" ")
-      "int strcmp (const char *, const char *);
+      "
+#ifndef _STRING_H
+#include <string.h>
+#endif
 int get_column_num (int nbcols, const char** header, const char* column)
 {
   int c;
@@ -450,29 +474,40 @@ int get_column_num (int nbcols, const char** header, const char* column)
 }
 ")))
 
-(defun org-babel-C-header-to-C (head)
+(defun org-babel-C-header-to-C (head type)
   "Convert an elisp list of header table into a C or D vector
 specifying a variable with the name of the table."
+  (message "%S" type)
   (let ((table (car head))
-        (headers (cdr head)))
+        (headers (cdr head))
+        (typename (pcase type
+                    (`integerp "int")
+                    (`floatp "double")
+                    (`stringp (pcase org-babel-c-variant
+                                ((or `c `cpp) "const char*")
+                                (`d "string"))))))
     (concat
-     (format
       (pcase org-babel-c-variant
-	((or `c `cpp) "const char* %s_header[%d] = {%s};")
-	(`d "string %s_header[%d] = [%s];"))
-      table
-      (length headers)
-      (mapconcat (lambda (h) (format "%S" h)) headers ","))
-     "\n"
+	((or `c `cpp)
+         (format "const char* %s_header[%d] = {%s};"
+                 table
+                 (length headers)
+                 (mapconcat (lambda (h) (format "\"%s\"" h)) headers ",")))
+	(`d
+         (format "string[%d] %s_header = [%s];"
+                 (length headers)
+                 table
+                 (mapconcat (lambda (h) (format "\"%s\"" h)) headers ","))))
+      "\n"
      (pcase org-babel-c-variant
        ((or `c `cpp)
 	(format
-	 "const char* %s_h (int row, const char* col) { return %s[row][get_column_num(%d,%s_header,col)]; }"
-	 table table (length headers) table))
+	 "%s %s_h (int row, const char* col) { return %s[row][get_column_num(%d,%s_header,col)]; }"
+	 typename table table (length headers) table))
        (`d
 	(format
-	 "string %s_h (size_t row, string col) { return %s[row][get_column_num(%s_header,col)]; }"
-	 table table table))))))
+	 "%s %s_h (size_t row, string col) { return %s[row][get_column_num(%s_header,col)]; }"
+         typename table table table))))))
 
 (provide 'ob-C)
 

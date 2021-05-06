@@ -82,11 +82,8 @@ probably do not need to install it.  Most users will simply activate
 Org and begin exploring its many features.
 
 If, for one reason or another, you want to install Org on top of this
-pre-packaged version, there are three ways to do it:
-
-- by using the Emacs package system;
-- by downloading Org as an archive; or
-- by using Org's git repository.
+pre-packaged version, you can use the Emacs package system or clone
+Org's git repository.
 
 We *strongly recommend* sticking to a single installation method.
 
@@ -105,32 +102,6 @@ You need to do this in a session where no =.org= file has been
 visited, i.e., where no Org built-in function have been loaded.
 Otherwise autoload Org functions will mess up the installation.
 #+end_quote
-
-If you want to use Org's package repository, check out the [[https://orgmode.org/elpa.html][Org ELPA
-page]].
-
-*** Downloading Org as an archive
-:PROPERTIES:
-:UNNUMBERED: notoc
-:END:
-
-You can download Org latest release from [[https://orgmode.org/][Org's website]].  In this case,
-make sure you set the load path correctly in your Emacs init file:
-
-#+begin_src emacs-lisp
-(add-to-list 'load-path "~/path/to/orgdir/lisp")
-#+end_src
-
-The downloaded archive contains contributed libraries that are not
-included in Emacs.  If you want to use them, add the =contrib/=
-directory to your load path:
-
-#+begin_src emacs-lisp
-(add-to-list 'load-path "~/path/to/orgdir/contrib/lisp" t)
-#+end_src
-
-Optionally, you can compile the files and/or install them in your
-system.  Run =make help= to list compilation and installation options.
 
 *** Using Org's git repository
 :PROPERTIES:
@@ -160,6 +131,16 @@ list of compilation/installation options.
 
 For more detailed explanations on Org's build system, please check the
 Org Build System page on [[https://orgmode.org/worg/dev/org-build-system.html][Worg]].
+
+*** Installing Org's contributed packages
+:PROPERTIES:
+:UNNUMBERED: notoc
+:END:
+
+Org's repository used to contain =contrib/= directory for add-ons
+contributed by others.  As of Org 9.5, the directory has bee moved to
+this new dedicated [[https://git.sr.ht/~bzg/org-contrib][org-contrib]] repository, which you can install
+separately.
 
 ** Activation
 :PROPERTIES:
@@ -273,7 +254,6 @@ shown below.
 
 ;; Add latest Org mode to load path.
 (add-to-list 'load-path (expand-file-name "/path/to/org-mode/lisp"))
-(add-to-list 'load-path (expand-file-name "/path/to/org-mode/contrib/lisp" t))
 #+end_src
 
 If an error occurs, a "backtrace" can be very useful---see below on
@@ -344,7 +324,7 @@ conventions:
 
 - =boss=, =ARCHIVE= ::
 
-  Tags are case-sensitive.  User-defined tags are written in
+  Tags are case-sensitive.  User-defined tags are usually written in
   lowercase; built-in tags with special meaning are written as they
   should appear in the document, usually with all capitals.
 
@@ -3289,9 +3269,10 @@ options:
 #+cindex: VM links
 #+cindex: Wanderlust links
 On top of these built-in link types, additional ones are available
-through the =contrib/= directory (see [[*Installation]]).  For example,
-these links to VM or Wanderlust messages are available when you load
-the corresponding libraries from the =contrib/= directory:
+through the =org-contrib= repository (see [[*Installation]]).  For
+example, these links to VM or Wanderlust messages are available when
+you load the corresponding libraries from the =org-contrib=
+repository:
 
 | =vm:folder=                            | VM folder link          |
 | =vm:folder#id=                         | VM message link         |
@@ -4136,7 +4117,7 @@ checkboxes is blocked from switching to DONE.
 
 If you need more complex dependency structures, for example
 dependencies between entries in different trees or files, check out
-the contributed module =org-depend.el=.
+the module =org-depend.el= in the =org-contrib= repository.
 
 ** Progress Logging
 :PROPERTIES:
@@ -5804,8 +5785,8 @@ block.  If there is a =TBLFM= keyword after the table, the table is
 recalculated automatically after an update.
 
 An alternative way to capture and process property values into a table
-is provided by Eric Schulte's =org-collector.el=, which is
-a contributed package[fn:58].  It provides a general API to collect
+is provided by Eric Schulte's =org-collector.el=, which is a package
+in =org-contrib=[fn:58].  It provides a general API to collect
 properties from entries in a certain scope, and arbitrary Lisp
 expressions to process these values before inserting them into a table
 or a dynamic block.
@@ -6089,6 +6070,7 @@ dash(es) as the separator in the former case and use =+= as the
 separator in the latter case, e.g.:
 
 | =11am-1:15pm=  | \rArr{} 11:00-13:15   |
+| =11h-13h15=    | \rArr{} same as above |
 | =11am--1:15pm= | \rArr{} same as above |
 | =11am+2:15=    | \rArr{} same as above |
 
@@ -7812,6 +7794,9 @@ Now lets look at the elements of a template definition.  Each entry in
   - ~:no-save~ ::
 
     Do not save the target file after finishing the capture.
+
+  - ~:refile-targets :: Temporarily set ~org-refile-targets~ to the
+    value of this property.
 
 **** Template expansion
 :PROPERTIES:
@@ -11433,7 +11418,7 @@ Users can install libraries for additional formats from the Emacs
 packaging system.  For easy discovery, these packages have a common
 naming scheme: ~ox-NAME~, where {{{var(NAME)}}} is a format.  For
 example, ~ox-koma-letter~ for /koma-letter/ back-end.  More libraries
-can be found in the =contrib/= directory (see [[*Installation]]).
+can be found in the =org-contrib= repository (see [[*Installation]]).
 
 #+vindex: org-export-backends
 Org only loads back-ends for the following formats by default: ASCII,
@@ -11524,7 +11509,7 @@ further alter what is exported, and how.
 
   Toggle visible-only export.  This is useful for exporting only
   certain parts of an Org document by adjusting the visibility of
-  particular headings.
+  particular headings.  See also [[*Sparse Trees]].
 
 ** Export Settings
 :PROPERTIES:
@@ -12599,7 +12584,7 @@ compatible with XHTML 1.0 strict standard.
   #+findex: org-html-export-to-html
 
   Export as HTML file with a =.html= extension.  For =myfile.org=, Org
-  exports to =myfile.html=, overwriting without warning.  {{{kbd{C-c
+  exports to =myfile.html=, overwriting without warning.  {{{kbd(C-c
   C-e h o)}}} exports to HTML and opens it in a web browser.
 
 - {{{kbd(C-c C-e h H)}}} (~org-html-export-as-html~) ::
@@ -16469,9 +16454,9 @@ extract, export, and publish source code blocks.  Org can also compile
 and execute a source code block, then capture the results.  The Org
 mode literature sometimes refers to source code blocks as /live code/
 blocks because they can alter the content of the Org document or the
-material that it exports.  Users can control how live they want each
-source code block by tweaking the header arguments (see [[*Using Header
-Arguments]]) for compiling, execution, extraction, and exporting.
+material that it exports.  Users can control how the "liveliness" of
+each source code block by tweaking the header arguments (see [[*Using
+Header Arguments]]) for compiling, execution, extraction, and exporting.
 
 For editing and formatting a source code block, Org uses an
 appropriate Emacs major mode that includes features specifically
@@ -16812,7 +16797,11 @@ the =var= header argument.
 body.  {{{var(ASSIGN)}}} is a literal value, such as a string,
 a number, a reference to a table, a list, a literal example, another
 code block---with or without arguments---or the results of evaluating
-a code block.
+a code block.  {{{var(ASSIGN)}}} may specify a filename for references
+to elements in a different file, using a =:= to separate the filename
+from the reference.
+
+: :var NAME=FILE:REFERENCE
 
 Here are examples of passing values by reference:
 
@@ -18667,14 +18656,14 @@ the variable ~org-use-speed-commands~ to a non-~nil~ value.  To
 trigger a Speed Key, point must be at the beginning of an Org
 headline, before any of the stars.
 
-#+vindex: org-speed-commands-user
+#+vindex: org-speed-commands
 #+findex: org-speed-command-help
 Org comes with a pre-defined list of Speed Keys.  To add or modify
-Speed Keys, customize the variable, ~org-speed-commands-user~.  For
-more details, see the variable's docstring.  With Speed Keys
-activated, {{{kbd(M-x org-speed-command-help)}}}, or {{{kbd(?)}}} when
-point is at the beginning of an Org headline, shows currently active
-Speed Keys, including the user-defined ones.
+Speed Keys, customize the option ~org-speed-commands~.  For more
+details, see the variable's docstring.  With Speed Keys activated,
+{{{kbd(M-x org-speed-command-help)}}}, or {{{kbd(?)}}} when point is at the
+beginning of an Org headline, shows currently active Speed Keys,
+including the user-defined ones.
 
 ** A Cleaner Outline View
 :PROPERTIES:
@@ -19959,12 +19948,10 @@ https://orgmode.org/worg/doc.html#hooks.
 :END:
 #+cindex: add-on packages
 
-Various authors wrote a large number of add-on packages for Org.
-
-These packages are not part of Emacs, but they are distributed as
-contributed packages with the separate release available at
-https://orgmode.org.  See the =contrib/README= file in the source code
-directory for a list of contributed files.  Worg page with more
+Various authors wrote a large number of add-on packages for Org.  Some
+of these packages used to be part of the =org-mode= repository but are
+now hosted in a separate =org-contrib= repository
+[[https://git.sr.ht/~bzg/org-contrib][here]].  A Worg page with more
 information is at: https://orgmode.org/worg/org-contrib/.
 
 ** Adding Hyperlink Types
@@ -21072,6 +21059,9 @@ be complete if the ones above were not mentioned in this manual.
 - Charles Cave's suggestion sparked the implementation of templates
   for Remember, which are now templates for capture.
 
+- Timothy E Chapman worked on a complete overhaul of the orgmode.org
+  website in 2020 and helped fixing various bugs.
+
 - Pavel Chalmoviansky influenced the agenda treatment of items with
   specified time.
 
@@ -21161,6 +21151,9 @@ be complete if the ones above were not mentioned in this manual.
 
 - Jason\nbsp{}F.\nbsp{}McBrayer suggested agenda export to CSV format.
 
+- Kyle Meyer helped setting up the [[https://public-inbox.org/][public-inbox]] archive of the [[https://orgmode.org/list/][Org
+  mailing list]] and has been fixing many bugs.
+
 - Max Mikhanosha came up with the idea of refiling.
 
 - Dmitri Minaev sent a patch to set priority limits on a per-file
@@ -21198,6 +21191,9 @@ be complete if the ones above were not mentioned in this manual.
 - Martin Pohlack provided the code snippet to bundle character
   insertion into bundles of 20 for undo.
 
+- Ihor Radchenko helped with fixing bugs and improving the user
+  experience regarding Org's speed.
+
 - T.\nbsp{}V.\nbsp{}Raman reported bugs and suggested improvements.
 
 - Matthias Rempe (Oelde) provided ideas, Windows support, and quality
@@ -21228,7 +21224,7 @@ be complete if the ones above were not mentioned in this manual.
   literal examples, and remote highlighting for referenced code lines.
 
 - Stathis Sideris wrote the =ditaa.jar= ASCII to PNG converter that is
-  now packaged into Org's =contrib/= directory.
+  now packaged into the [[https://git.sr.ht/~bzg/org-contrib][org-contrib]] repository.
 
 - Daniel Sinder came up with the idea of internal archiving by locking
   subtrees.
@@ -21652,12 +21648,12 @@ lognoteclock-out=.
 line---the line is broken here only to fit it into the manual.
 
 [fn:81] On computers using macOS, idleness is based on actual user
-idleness, not just Emacs' idle time.  For X11, you can install
-a utility program =x11idle.c=, available in the =contrib/scripts/=
-directory of the Org Git distribution, or install the xprintidle
-package and set it to the variable ~org-clock-x11idle-program-name~ if
-you are running Debian, to get the same general treatment of idleness.
-On other systems, idle time refers to Emacs idle time only.
+idleness, not just Emacs' idle time.  For X11, you can install a
+utility program =x11idle.c=, available in the =org-contrib/=
+repository, or install the xprintidle package and set it to the
+variable ~org-clock-x11idle-program-name~ if you are running Debian,
+to get the same general treatment of idleness.  On other systems, idle
+time refers to Emacs idle time only.
 
 [fn:82] Please note the pitfalls of summing hierarchical data in
 a flat list (see [[*Using Column View in the Agenda]]).
