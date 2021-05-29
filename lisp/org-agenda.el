@@ -3247,11 +3247,11 @@ s   Search for keywords                 M   Like m, but only TODO entries
 (defvar org-agenda-overriding-cmd-arguments nil)
 
 (defun org-let (list &rest body) ;FIXME: So many kittens are suffering here.
-  (declare (indent 1) (obsolete cl-progv "Mar 2021"))
+  (declare (indent 1) (obsolete cl-progv "2021"))
   (eval (cons 'let (cons list body))))
 
 (defun org-let2 (list1 list2 &rest body) ;FIXME: Where did our karma go?
-  (declare (indent 2) (obsolete cl-progv "Mar 2021"))
+  (declare (indent 2) (obsolete cl-progv "2021"))
   (eval (cons 'let (cons list1 (list (cons 'let (cons list2 body)))))))
 
 (defun org-agenda-run-series (name series)
@@ -6059,7 +6059,7 @@ See also the user option `org-agenda-clock-consistency-checks'."
 		       '((:background "DarkRed") (:foreground "white"))))
 	 issue face m te ts dt ov)
     (goto-char (point-min))
-    (while (re-search-forward " Clocked: +(-\\|\\([0-9]+:[0-9]+\\))" nil t)
+    (while (re-search-forward " Clocked: +(\\(?:-\\|\\([0-9]+:[0-9]+\\)\\))" nil t)
       (setq issue nil face def-face)
       (catch 'next
 	(setq m (org-get-at-bol 'org-marker)
@@ -6739,7 +6739,6 @@ Any match of REMOVE-RE will be removed from TXT."
 			   (= (match-beginning 0) 0)
 			 t))
 	      (setq txt (replace-match "" nil nil txt))))
-
 	  ;; Try to set s2 if s1 and
 	  ;; `org-agenda-default-appointment-duration' are set
 	  (when (and s1 (not s2) org-agenda-default-appointment-duration)
@@ -6748,16 +6747,13 @@ Any match of REMOVE-RE will be removed from TXT."
 		   (+ (org-duration-to-minutes s1 t)
 		      org-agenda-default-appointment-duration)
 		   nil t)))
-
 	  ;; Compute the duration
 	  (when s2
 	    (setq duration (- (org-duration-to-minutes s2)
 			      (org-duration-to-minutes s1))))
-
           ;; Normalize the time(s) to 24 hour
 	  (when s1 (setq s1 (org-get-time-of-day s1 'string t)))
 	  (when s2 (setq s2 (org-get-time-of-day s2 'string t))))
-
 	(when (string-match org-tag-group-re txt)
 	  ;; Tags are in the string
 	  (if (or (eq org-agenda-remove-tags t)
@@ -6999,7 +6995,7 @@ HH:MM."
 	     (h2 (if (and string mod24 (not (and (= m 0) (= h1 24))))
 		     (mod h1 24) h1))
 	     (t0 (+ (* 100 h2) m))
-	     (t1 (concat (if (>= h1 24) "+" " ")
+	     (t1 (concat (if (>= h1 24) "+" "0")
 			 (if (and org-agenda-time-leading-zero
 				  (< t0 1000)) "0" "")
 			 (if (< t0 100) "0" "")
@@ -7148,13 +7144,14 @@ The optional argument TYPE tells the agenda type."
 	    (setq x
 		  (concat
 		   (substring x 0 (match-end 1))
-		   (format org-agenda-todo-keyword-format
-			   (match-string 2 x))
-		   ;; Remove `display' property as the icon could leak
+                   (unless (string-empty-p org-agenda-todo-keyword-format)
+		     (format org-agenda-todo-keyword-format
+			     (match-string 2 x)))
+                   ;; Remove `display' property as the icon could leak
 		   ;; on the white space.
 		   (org-add-props " " (org-plist-delete (text-properties-at 0 x)
-							'display))
-		   (substring x (match-end 3)))))))
+			 				'display))
+                   (substring x (match-end 3)))))))
       x)))
 
 (defsubst org-cmp-values (a b property)
@@ -10619,9 +10616,7 @@ The prefix arg is passed through to the command if possible."
 	      (let (org-loop-over-headlines-in-active-region) (funcall cmd))
 	      ;; `post-command-hook' is not run yet.  We make sure any
 	      ;; pending log note is processed.
-	      (when (or (memq 'org-add-log-note (default-value 'post-command-hook))
-			(memq 'org-add-log-note post-command-hook))
-		(org-add-log-note))
+	      (when org-log-setup (org-add-log-note))
 	      (cl-incf processed))))
 	(when redo-at-end (org-agenda-redo))
 	(unless org-agenda-persistent-marks (org-agenda-bulk-unmark-all))

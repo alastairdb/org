@@ -39,6 +39,7 @@
 (declare-function org-string-collate-lessp "org-compat" (s1 s2 &optional locale ignore-case))
 
 (defvar org-ts-regexp0)
+(defvar ffap-url-regexp)
 
 
 ;;; Macros
@@ -172,7 +173,7 @@ because otherwise all these markers will point to nowhere."
        ,@body)))
 
 (defmacro org-eval-in-environment (environment form)
-  (declare (debug (form form)) (indent 1) (obsolete cl-progv "Mar 2021"))
+  (declare (debug (form form)) (indent 1) (obsolete cl-progv "2021"))
   `(eval (list 'let ,environment ',form)))
 
 ;;;###autoload
@@ -807,6 +808,10 @@ return nil."
 	   (list context (match-beginning group) (match-end group))
 	 t)))
 
+(defun org-url-p (s)
+  "Non-nil if string S is a URL."
+  (require 'ffap)
+  (string-match-p ffap-url-regexp s))
 
 
 ;;; String manipulation

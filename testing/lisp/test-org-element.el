@@ -662,6 +662,9 @@ Some other text
   (should-not
    (org-test-with-temp-text ":TEST:"
      (org-element-map (org-element-parse-buffer) 'drawer 'identity nil t)))
+  (should-not
+   (org-test-with-temp-text ":END:"
+     (org-element-map (org-element-parse-buffer) 'drawer 'identity nil t)))
   ;; Handle non-empty blank line at the end of buffer.
   (should
    (org-test-with-temp-text ":TEST:\nC\n:END:\n "
@@ -3770,7 +3773,7 @@ Text
    (eq 'table
        (let ((org-element-use-cache t))
 	 (org-test-with-temp-text
-	     "#+begin_center\nP0\n\n<point>\n\n  P1\n  | a | b |\n| c | d |\n#+end_center"
+	     "#+begin_center\nP0\n\n<point>\n\n  P1\n  | a | b |\n  | c | d |\n#+end_center"
 	   (save-excursion (search-forward "| c |") (org-element-at-point))
 	   (insert "- item")
 	   (search-forward "| c |")
@@ -3889,6 +3892,21 @@ Text
 	    :end (org-element-property :parent (org-element-at-point)))
 	   (+ parent-end 3))))))
 
+(ert-deftest test-org-element/cache-bugs ()
+  "Test basic expectations and common pitfalls for cache."
+  :expected-result :failed
+  ;; Unindented second row of the table should not be re-parented by
+  ;; inserted item.
+  (should
+   (eq 'table
+       (let ((org-element-use-cache t))
+	 (org-test-with-temp-text
+	  "#+begin_center\nP0\n\n<point>\n\n  P1\n  | a | b |\n| c | d |\n#+end_center"
+	  (save-excursion (search-forward "| c |") (org-element-at-point))
+	  (insert "- item")
+	  (search-forward "| c |")
+	  (beginning-of-line)
+	  (org-element-type (org-element-at-point)))))))
 
 (provide 'test-org-element)
 
