@@ -895,14 +895,16 @@ This means, between the beginning of line and the point."
                t))
 
             (defadvice org-open-at-point (around org-mouse-open-at-point activate)
-              (let ((context (org-context)))
-                (cond
-                 ((assq :headline-stars context) (org-cycle))
-                 ((assq :checkbox context) (org-toggle-checkbox))
-                 ((assq :item-bullet context)
-                  (let ((org-cycle-include-plain-lists t)) (org-cycle)))
-                 ((org-footnote-at-reference-p) nil)
-                 (t ad-do-it))))))
+              (if (mouse-event-p last-input-event)
+                  (let ((context (org-context)))
+                    (cond
+                     ((assq :headline-stars context) (org-cycle))
+                     ((assq :checkbox context) (org-toggle-checkbox))
+                     ((assq :item-bullet context)
+                      (let ((org-cycle-include-plain-lists t)) (org-cycle)))
+                     ((org-footnote-at-reference-p) nil)
+                     (t ad-do-it)))
+                ad-do-it))))
 
 (defun org-mouse-move-tree-start (_event)
   (interactive "e")
