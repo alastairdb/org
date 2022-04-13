@@ -1,6 +1,6 @@
 ;;; ox-latex.el --- LaTeX Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -755,8 +755,11 @@ environment."
 
 (defcustom org-latex-inline-image-rules
   `(("file" . ,(rx "."
-		   (or "pdf" "jpeg" "jpg" "png" "ps" "eps" "tikz" "pgf" "svg")
-		   eos)))
+                   (or "pdf" "jpeg" "jpg" "png" "ps" "eps" "tikz" "pgf" "svg")
+                   eos))
+    ("https" . ,(rx "."
+                    (or "jpeg" "jpg" "png" "ps" "eps" "tikz" "pgf" "svg")
+                    eos)))
   "Rules characterizing image files that can be inlined into LaTeX.
 
 A rule consists in an association whose key is the type of link
@@ -2411,6 +2414,7 @@ used as a communication channel."
 		  (cond ((string= float "wrap") 'wrap)
 			((string= float "sideways") 'sideways)
 			((string= float "multicolumn") 'multicolumn)
+                        ((string= float "t") 'figure)
 			((and (plist-member attr :float) (not float)) 'nonfloat)
                         (float float)
 			((or (org-element-property :caption parent)
@@ -2588,7 +2592,7 @@ INFO is a plist holding contextual information.  See
      ;; Link type is handled by a special function.
      ((org-export-custom-protocol-maybe link desc 'latex info))
      ;; Image file.
-     (imagep (org-latex--inline-image link info))
+     (imagep (org-latex--inline-image (org-export-link-localise link) info))
      ;; Radio link: Transcode target's contents and use them as link's
      ;; description.
      ((string= type "radio")
@@ -3266,6 +3270,7 @@ Return new environment, as a string."
 	    (cond ((and (not float) (plist-member attributes :float)) nil)
 		  ((member float '("sidewaystable" "sideways")) "sidewaystable")
 		  ((equal float "multicolumn") "table*")
+                  ((string= float "t") "table")
                   (float float)
 		  ((org-string-nw-p caption) "table")
 		  (t nil))))
@@ -3708,7 +3713,7 @@ Return PDF file's name."
   (let ((outfile (org-export-output-file-name ".tex" subtreep)))
     (org-export-to-file 'latex outfile
       async subtreep visible-only body-only ext-plist
-      (lambda (file) (org-latex-compile file)))))
+      #'org-latex-compile)))
 
 (defun org-latex-compile (texfile &optional snippet)
   "Compile a TeX file.

@@ -1,7 +1,7 @@
 ;;; org.el --- Outline-based notes management and organizer -*- lexical-binding: t; -*-
 
 ;; Carstens outline-mode for keeping track of everything.
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Maintainer: Bastien Guerry <bzg@gnu.org>
@@ -95,7 +95,6 @@
 (require 'org-keys)
 (require 'ol)
 (require 'oc)
-(require 'oc-basic)
 (require 'org-table)
 
 ;; `org-outline-regexp' ought to be a defconst but is let-bound in
@@ -192,7 +191,7 @@ Stars are put in group 1 and the trimmed body in group 2.")
 (declare-function org-latex-make-preamble "ox-latex" (info &optional template snippet?))
 (declare-function org-num-mode "org-num" (&optional arg))
 (declare-function org-plot/gnuplot "org-plot" (&optional params))
-(declare-function org-persist-read "org-persist" (var &optional buffer))
+(declare-function org-persist-load "org-persist" (container &optional associated hash-must-match))
 (declare-function org-tags-view "org-agenda" (&optional todo-only match))
 (declare-function org-timer "org-timer" (&optional restart no-insert))
 (declare-function org-timer-item "org-timer" (&optional arg))
@@ -205,6 +204,7 @@ Stars are put in group 1 and the trimmed body in group 2.")
 
 (defvar org-agenda-buffer-name)
 (defvar org-element-paragraph-separate)
+(defvar org-element-cache-map-continue-from)
 (defvar org-indent-indentation-per-level)
 (defvar org-radio-target-regexp)
 (defvar org-target-link-regexp)
@@ -699,7 +699,7 @@ defined in org-duration.el.")
 If a description starts with <C>, the file is not part of Emacs and Org mode,
 so loading it will require that you have properly installed org-contrib
 package from NonGNU Emacs Lisp Package Archive
-http://elpa.nongnu.org/nongnu/org-contrib.html
+https://elpa.nongnu.org/nongnu/org-contrib.html
 
 You can also use this system to load external packages (i.e. neither Org
 core modules, nor org-contrib modules).  Just add symbols
@@ -779,7 +779,7 @@ For export specific modules, see also `org-export-backends'."
 If a description starts with <C>, the file is not part of Emacs and Org mode,
 so loading it will require that you have properly installed org-contrib
 package from NonGNU Emacs Lisp Package Archive
-http://elpa.nongnu.org/nongnu/org-contrib.html
+https://elpa.nongnu.org/nongnu/org-contrib.html
 
 Unlike to `org-modules', libraries in this list will not be
 loaded along with Org, but only once the export framework is
@@ -4821,6 +4821,8 @@ This is for getting out of special buffers like capture.")
 
 (defvar org-element-cache-persistent); Defined in org-element.el
 (defvar org-element-use-cache); Defined in org-element.el
+(defvar org-mode-loading nil
+  "Non-nil during Org mode initialisation.")
 ;;;###autoload
 (define-derived-mode org-mode outline-mode "Org"
   "Outline-based notes management and organizer, alias
@@ -4840,6 +4842,7 @@ can be exported as a structured ASCII or HTML file.
 The following commands are available:
 
 \\{org-mode-map}"
+  (setq-local org-mode-loading t)
   (org-load-modules-maybe)
   (org-install-agenda-files-menu)
   (when org-link-descriptive (add-to-invisibility-spec '(org-link)))
@@ -4875,6 +4878,11 @@ The following commands are available:
   (add-hook 'before-change-functions 'org-before-change-function nil 'local)
   ;; Check for running clock before killing a buffer
   (add-hook 'kill-buffer-hook 'org-check-running-clock nil 'local)
+  ;; Initialize cache.
+  (org-element-cache-reset)
+  (when (and org-element-cache-persistent
+             org-element-use-cache)
+    (org-persist-load 'org-element--cache (current-buffer) t))
   ;; Initialize macros templates.
   (org-macro-initialize-templates)
   ;; Initialize radio targets.
@@ -4886,11 +4894,6 @@ The following commands are available:
   (org-setup-filling)
   ;; Comments.
   (org-setup-comments-handling)
-  ;; Initialize cache.
-  (org-element-cache-reset)
-  (when (and org-element-cache-persistent
-             org-element-use-cache)
-    (org-persist-read 'org-element--cache (current-buffer)))
   ;; Beginning/end of defun
   (setq-local beginning-of-defun-function 'org-backward-element)
   (setq-local end-of-defun-function
@@ -4979,7 +4982,8 @@ The following commands are available:
   ;; Set face extension as requested.
   (org--set-faces-extend '(org-block-begin-line org-block-end-line)
                          org-fontify-whole-block-delimiter-line)
-  (org--set-faces-extend org-level-faces org-fontify-whole-heading-line))
+  (org--set-faces-extend org-level-faces org-fontify-whole-heading-line)
+  (setq-local org-mode-loading nil))
 
 ;; Update `customize-package-emacs-version-alist'
 (add-to-list 'customize-package-emacs-version-alist
@@ -5785,8 +5789,13 @@ needs to be inserted at a specific position in the font-lock sequence.")
 		'(9 'org-special-keyword t))
 	  ;; Blocks and meta lines
 	  '(org-fontify-meta-lines-and-blocks)
-          ;; Citations
-          '(org-cite-activate))))
+          '(org-fontify-inline-src-blocks)
+          ;; Citations.  When an activate processor is specified, if
+          ;; specified, try loading it beforehand.
+          (progn
+            (unless (null org-cite-activate-processor)
+              (org-cite-try-load-processor org-cite-activate-processor))
+            '(org-cite-activate)))))
     (setq org-font-lock-extra-keywords (delq nil org-font-lock-extra-keywords))
     (run-hooks 'org-font-lock-set-keywords-hook)
     ;; Now set the full font-lock-keywords
@@ -6920,7 +6929,7 @@ frame is not changed."
       (setq beg (point)
 	    heading (org-get-heading 'no-tags))
       (org-end-of-subtree t t)
-      (when (org-at-heading-p) (backward-char 1))
+      (when (and (not (eobp)) (org-at-heading-p)) (backward-char 1))
       (setq end (point)))
     (when (and (buffer-live-p org-last-indirect-buffer)
 	       (not (eq org-indirect-buffer-display 'new-frame))
@@ -8568,14 +8577,15 @@ This will temporarily bind local variables that are typically bound in
 Org mode to the values they have in Org mode, and then interactively
 call CMD."
   (org-load-modules-maybe)
-  (let (binds)
+  (let (vars vals)
     (dolist (var (org-get-local-variables))
       (when (or (not (boundp (car var)))
 		(eq (symbol-value (car var))
 		    (default-value (car var))))
-	(push (list (car var) `(quote ,(cadr var))) binds)))
-    (eval `(let ,binds
-	     (call-interactively (quote ,cmd))))))
+	(push (car var) vars)
+	(push (cadr var) vals)))
+    (cl-progv vars vals
+      (call-interactively cmd))))
 
 (defun org-get-category (&optional pos force-refresh)
   "Get the category applying to position POS."
@@ -9504,7 +9514,7 @@ block can be inserted by pressing TAB after the string \"<KEY\"."
 In particular, check if the Org 9.2 format is used as opposed to
 previous format."
   (let ((elm (cl-remove-if-not (lambda (x) (listp (cdr x)))
-			       (or (eval checklist)
+			       (or (symbol-value checklist)
 				   org-structure-template-alist))))
     (when elm
       (org-display-warning
@@ -11366,13 +11376,14 @@ or a character."
 	    (setq
 	     new
 	     (if nump
-                 (let ((msg (format "Priority %s-%s, SPC to remove: "
-				    (number-to-string org-priority-highest)
-				    (number-to-string org-priority-lowest))))
-                   (if (< 9 org-priority-lowest)
-		       (string-to-number (read-string msg))
-                     (message msg)
-                     (string-to-number (char-to-string (read-char-exclusive)))))
+                 (let* ((msg (format "Priority %s-%s, SPC to remove: "
+                                     (number-to-string org-priority-highest)
+                                     (number-to-string org-priority-lowest)))
+                        (s (if (< 9 org-priority-lowest)
+                               (read-string msg)
+                             (message msg)
+                             (char-to-string (read-char-exclusive)))))
+                   (if (equal s " ") ?\s (string-to-number s)))
 	       (progn (message "Priority %c-%c, SPC to remove: "
 			       org-priority-highest org-priority-lowest)
 		      (save-match-data
@@ -11636,6 +11647,7 @@ headlines matching this string."
 	             (goto-char (1- (org-element-property :end el))))))
                ;; Get the correct position from where to continue
 	       (when org-map-continue-from
+                 (setq org-element-cache-map-continue-from org-map-continue-from)
 	         (goto-char org-map-continue-from))
                ;; Return nil.
                nil)
@@ -12599,9 +12611,9 @@ Assume point is at the beginning of the headline."
   (let* ((cached (and (org-element--cache-active-p) (org-element-at-point nil 'cached)))
          (cached-tags (org-element-property :tags cached)))
     (if cached
-        ;; If we do not wrap result into `cl-copy-list', reference would
+        ;; If we do explicitly copy the result, reference would
         ;; be returned and cache element might be modified directly.
-        (cl-copy-list cached-tags)
+        (mapcar #'copy-sequence cached-tags)
       ;; Parse tags manually.
       (and (looking-at org-tag-line-re)
            (split-string (match-string-no-properties 2) ":" t)))))
@@ -12645,9 +12657,9 @@ Inherited tags have the `inherited' text property."
               (if cached
                   (while (setq cached (org-element-property :parent cached))
                     (setq itags (nconc (mapcar #'org-add-prop-inherited
-                                               ;; If we do not wrap result into `cl-copy-list', reference would
+                                               ;; If we do explicitly copy the result, reference would
                                                ;; be returned and cache element might be modified directly.
-                                               (cl-copy-list (org-element-property :tags cached)))
+                                               (mapcar #'copy-sequence (org-element-property :tags cached)))
                                        itags)))
                 (while (org-up-heading-safe)
                   (setq itags (nconc (mapcar #'org-add-prop-inherited
@@ -12793,7 +12805,7 @@ a *different* entry, you cannot use these techniques."
 	    ;; Get the right scope
 	    (cond
 	     ((and scope (listp scope) (symbolp (car scope)))
-	      (setq scope (eval scope)))
+	      (setq scope (eval scope t)))
 	     ((eq scope 'agenda)
 	      (setq scope (org-agenda-files t)))
 	     ((eq scope 'agenda-with-archives)
@@ -12960,9 +12972,10 @@ variables is set."
     ;; Maybe update the effort value:
     (unless (equal current value)
       (org-entry-put nil org-effort-property value))
-    (org-refresh-property '((effort . identity)
-			    (effort-minutes . org-duration-to-minutes))
-			  value)
+    (unless (org-element--cache-active-p)
+      (org-refresh-property '((effort . identity)
+			   (effort-minutes . org-duration-to-minutes))
+		         value))
     (when (equal (org-get-heading t t t t)
 		 (bound-and-true-p org-clock-current-task))
       (setq org-clock-effort value)
@@ -13589,9 +13602,8 @@ drawer is immediately hidden."
      (org-with-limited-levels (org-back-to-heading-or-point-min t)))
    (if (org-before-first-heading-p)
        (while (and (org-at-comment-p) (bolp)) (forward-line))
-     (progn
-       (forward-line)
-       (when (looking-at-p org-planning-line-re) (forward-line))))
+     (forward-line)
+     (when (looking-at-p org-planning-line-re) (forward-line)))
    (unless (looking-at-p org-property-drawer-re)
      ;; Make sure we start editing a line from current entry, not from
      ;; next one.  It prevents extending text properties or overlays
@@ -13910,10 +13922,11 @@ completion."
     (beginning-of-line 1)
     (skip-chars-forward " \t")
     (when (equal prop org-effort-property)
-      (org-refresh-property
-       '((effort . identity)
-	 (effort-minutes . org-duration-to-minutes))
-       nval)
+      (unless (org-element--cache-active-p)
+        (org-refresh-property
+         '((effort . identity)
+	   (effort-minutes . org-duration-to-minutes))
+         nval))
       (when (string= org-clock-current-task heading)
 	(setq org-clock-effort nval)
 	(org-clock-update-mode-line)))
@@ -14613,7 +14626,7 @@ Unless KEEPDATE is non-nil, update `org-ans2' to the cursor date."
   (let ((sf (selected-frame))
 	(sw (selected-window)))
     (select-window (get-buffer-window "*Calendar*" t))
-    (eval form)
+    (eval form t)
     (when (and (not keepdate) (calendar-cursor-to-date))
       (let* ((date (calendar-cursor-to-date))
 	     (time (encode-time 0 0 0 (nth 1 date) (nth 0 date) (nth 2 date))))
@@ -15027,6 +15040,8 @@ D may be an absolute day number, or a calendar-type list (month day year)."
   (let* ((sexp `(let ((entry ,entry)
 		      (date ',d))
 		  ,(car (read-from-string sexp))))
+         ;; FIXME: Do not use (eval ... t) in the following sexp as
+         ;; diary vars are still using dynamic scope.
 	 (result (if calendar-debug-sexp (eval sexp)
 		   (condition-case nil
 		       (eval sexp)
@@ -15242,7 +15257,11 @@ When matching, the match groups are the following:
   group 4: day name
   group 5: hours, if any
   group 6: minutes, if any"
-  (let* ((regexp (if extended org-ts-regexp3 org-ts-regexp2))
+  (let* ((regexp (if extended
+                     (if (eq extended 'agenda)
+                         org-element--timestamp-regexp
+		       org-ts-regexp3)
+                   org-ts-regexp2))
 	 (pos (point))
 	 (match?
 	  (let ((boundaries (org-in-regexp regexp)))
@@ -15273,7 +15292,8 @@ When matching, the match groups are the following:
      ((org-pos-in-match-range pos 8)      'minute)
      ((or (org-pos-in-match-range pos 4)
 	  (org-pos-in-match-range pos 5)) 'day)
-     ((and (> pos (or (match-end 8) (match-end 5)))
+     ((and (or (match-end 8) (match-end 5))
+           (> pos (or (match-end 8) (match-end 5)))
 	   (< pos (match-end 0)))
       (- pos (or (match-end 8) (match-end 5))))
      (t                                   'day))))
@@ -15902,7 +15922,7 @@ When a buffer is unmodified, it is just killed.  When modified, it is saved
 	    (or (memq 'stats org-agenda-ignore-properties)
 		(org-refresh-stats-properties))
 	    (or (memq 'effort org-agenda-ignore-properties)
-                (unless (org-element--cache-active-p)
+                (unless org-element-use-cache
 		  (org-refresh-effort-properties)))
 	    (or (memq 'appt org-agenda-ignore-properties)
 		(org-refresh-properties "APPT_WARNTIME" 'org-appt-warntime))
@@ -15957,25 +15977,29 @@ in Org mode.
     (cdlatex-compute-tables))
   (unless org-cdlatex-texmathp-advice-is-done
     (setq org-cdlatex-texmathp-advice-is-done t)
-    (defadvice texmathp (around org-math-always-on activate)
-      "Always return t in Org buffers.
+    (advice-add 'texmathp :around #'org--math-always-on)))
+
+(defun org--math-always-on (orig-fun &rest args)
+  "Always return t in Org buffers.
 This is because we want to insert math symbols without dollars even outside
 the LaTeX math segments.  If Org mode thinks that point is actually inside
 an embedded LaTeX fragment, let `texmathp' do its job.
 `\\[org-cdlatex-mode-map]'"
-      (interactive)
-      (let (p)
-	(cond
-	 ((not (derived-mode-p 'org-mode)) ad-do-it)
-	 ((eq this-command 'cdlatex-math-symbol)
-	  (setq ad-return-value t
-		texmathp-why '("cdlatex-math-symbol in org-mode" . 0)))
-	 (t
-	  (let ((p (org-inside-LaTeX-fragment-p)))
-	    (if (and p (member (car p) (plist-get org-format-latex-options :matchers)))
-		(setq ad-return-value t
-		      texmathp-why '("Org mode embedded math" . 0))
-	      (when p ad-do-it)))))))))
+  (interactive)
+  (cond
+   ((not (derived-mode-p 'org-mode)) (apply orig-fun args))
+   ((eq this-command 'cdlatex-math-symbol)
+    (setq texmathp-why '("cdlatex-math-symbol in org-mode" . 0))
+    t)
+   (t
+    (let ((p (org-inside-LaTeX-fragment-p)))
+      (when p ;; FIXME: Shouldn't we return t when `p' is nil?
+	(if (member (car p)
+	            (plist-get org-format-latex-options :matchers))
+	    (progn
+	      (setq texmathp-why '("Org mode embedded math" . 0))
+	      t)
+	  (apply orig-fun args)))))))
 
 (defun turn-on-org-cdlatex ()
   "Unconditionally turn on `org-cdlatex-mode'."
@@ -16935,8 +16959,8 @@ overwritten, and the table is not marked as requiring realignment."
       (call-interactively org-speed-command))
      ((functionp org-speed-command)
       (funcall org-speed-command))
-     ((and org-speed-command (listp org-speed-command))
-      (eval org-speed-command))
+     ((consp org-speed-command)
+      (eval org-speed-command t))
      (t (let (org-use-speed-commands)
 	  (call-interactively 'org-self-insert-command)))))
    ((and
@@ -17460,10 +17484,10 @@ for more information."
    ((run-hook-with-args-until-success 'org-metaup-hook))
    ((org-region-active-p)
     (let* ((a (save-excursion
-		(goto-char (min (region-beginning) (region-end)))
+		(goto-char (region-beginning))
 		(line-beginning-position)))
 	   (b (save-excursion
-		(goto-char (max (region-beginning) (region-end)))
+		(goto-char (region-end))
 		(if (bolp) (1- (point)) (line-end-position))))
 	   (c (save-excursion
 		(goto-char a)
@@ -17493,10 +17517,10 @@ commands for more information."
    ((run-hook-with-args-until-success 'org-metadown-hook))
    ((org-region-active-p)
     (let* ((a (save-excursion
-		(goto-char (min (region-beginning) (region-end)))
+		(goto-char (region-beginning))
 		(line-beginning-position)))
 	   (b (save-excursion
-		(goto-char (max (region-beginning) (region-end)))
+		(goto-char (region-end))
 		(if (bolp) (1- (point)) (line-end-position))))
 	   (c (save-excursion
 		(goto-char b)
@@ -17734,11 +17758,11 @@ this numeric value."
   (interactive "r")
   (let ((result ""))
     (while (/= beg end)
-      (when (get-char-property beg 'invisible)
-	(setq beg (next-single-char-property-change beg 'invisible nil end)))
-      (let ((next (next-single-char-property-change beg 'invisible nil end)))
-	(setq result (concat result (buffer-substring beg next)))
-	(setq beg next)))
+      (if (invisible-p beg)
+          (setq beg (next-single-char-property-change beg 'invisible nil end))
+        (let ((next (next-single-char-property-change beg 'invisible nil end)))
+          (setq result (concat result (buffer-substring beg next)))
+          (setq beg next))))
     (setq deactivate-mark t)
     (kill-new result)
     (message "Visible strings have been copied to the kill ring.")))
@@ -18764,7 +18788,8 @@ such private information before sending the email.")
 			    (string-match "\\(-hook\\|-function\\)\\'" (symbol-name v)))
 		       (and
 			(get v 'custom-type) (get v 'standard-value)
-			(not (equal (symbol-value v) (eval (car (get v 'standard-value)))))))
+			(not (equal (symbol-value v)
+			            (eval (car (get v 'standard-value)) t)))))
 		   (push v list)))))
 	 (kill-buffer (get-buffer "*Warn about privacy*"))
 	 list))
@@ -18943,17 +18968,19 @@ With prefix arg UNCOMPILED, load the uncompiled versions."
   "Is S an ID created by UUIDGEN?"
   (string-match "\\`[0-9a-f]\\{8\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{12\\}\\'" (downcase s)))
 
-(defun org-in-src-block-p (&optional inside)
+(defun org-in-src-block-p (&optional inside element)
   "Whether point is in a code source block.
 When INSIDE is non-nil, don't consider we are within a source
-block when point is at #+BEGIN_SRC or #+END_SRC."
-  (let ((case-fold-search t))
-    (or (and (eq (get-char-property (point) 'src-block) t))
-	(and (not inside)
-	     (save-match-data
-	       (save-excursion
-		 (beginning-of-line)
-		 (looking-at ".*#\\+\\(begin\\|end\\)_src")))))))
+block when point is at #+BEGIN_SRC or #+END_SRC.
+When ELEMENT is provided, it is considered to be element at point."
+  (save-match-data (setq element (or element (org-element-at-point))))
+  (when (eq 'src-block (org-element-type element))
+    (or (not inside)
+        (not (or (= (line-beginning-position)
+                  (org-element-property :post-affiliated element))
+               (= (1+ (line-end-position))
+                  (- (org-element-property :end element)
+                     (org-element-property :post-blank element))))))))
 
 (defun org-context ()
   "Return a list of contexts of the current cursor position.
@@ -20728,11 +20755,16 @@ instead of back to heading."
     (org-back-to-heading invisible-ok)))
 
 (defun org-before-first-heading-p ()
-  "Before first heading?"
-  (org-with-limited-levels
-   (save-excursion
-     (end-of-line)
-     (null (re-search-backward org-outline-regexp-bol nil t)))))
+  "Before first heading?
+Respect narrowing."
+  (if (org-element--cache-active-p)
+      (let ((cached-headline (org-element-lineage (org-element-at-point) '(headline) t)))
+        (or (not cached-headline)
+            (< (org-element-property :begin cached-headline) (point-min))))
+    (org-with-limited-levels
+     (save-excursion
+       (end-of-line)
+       (null (re-search-backward org-outline-regexp-bol nil t))))))
 
 (defun org-at-heading-p (&optional _)
   "Non-nil when on a headline."

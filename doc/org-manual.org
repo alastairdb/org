@@ -18,24 +18,30 @@
 :END:
 #+cindex: summary
 
-Org is a mode for keeping notes, maintaining TODO lists, and project
-planning with a fast and effective plain-text markup language.  It
-also is an authoring system with unique support for literate
-programming and reproducible research.
+Org Mode is an authoring tool and a TODO lists manager for GNU Emacs.
+It relies on a lightweight plain-text markup language used in files
+with the =.org= extension.
 
-Org is implemented on top of Outline mode, which makes it possible to
-keep the content of large files well structured.  Visibility cycling
-and structure editing help to work with the tree.  Tables are easily
-created with a built-in table editor.  Plain text URL-like links
-connect to websites, emails, Usenet messages, BBDB entries, and any
-files related to the projects.
+As an authoring tool, Org helps you write structured documents and
+provides exporting facilities. Org files can also be used for literate
+programming and reproducible research.  As a TODO lists manager, Org
+helps you organize your tasks in a flexible way, from daily needs to
+detailed project-planning, allowing logging, multiple views on your
+tasks, exporting your agendas, etc.
+
+Org mode is implemented on top of Outline mode, which makes it
+possible to keep the content of large files well structured.
+Visibility cycling and structure editing help to work with the tree.
+Tables are easily created with a built-in table editor.  Plain text
+URL-like links connect to websites, emails, Usenet messages, BBDB
+entries, and any files related to the projects.
 
 Org develops organizational tasks around notes files that contain
 lists or information about projects as plain text.  Project planning
 and task management make use of metadata which is part of an outline
 node.  Based on this data, specific entries can be extracted in
-queries and create dynamic /agenda views/ that also integrate the
-Emacs calendar and diary.  Org can be used to implement many different
+queries and create dynamic /agenda views/ that also integrate the Emacs
+calendar and diary.  Org can be used to implement many different
 project planning schemes, such as David Allen's GTD system.
 
 Org files can serve as a single source authoring system with export to
@@ -6412,7 +6418,7 @@ special repeaters =++= and =.+=.  For example:
    Marking this DONE shifts the date to one month after today.
 
 ,** TODO Wash my hands
-   DEADLINE: <2019-04-05 08:00 Sun .+1h>
+   DEADLINE: <2019-04-05 08:00 Fri .+1h>
    Marking this DONE shifts the date to exactly one hour from now.
 #+end_example
 
@@ -9742,8 +9748,8 @@ the other commands, point needs to be in the desired line.
   variable ~org-agenda-start-with-clockreport-mode~.  By using
   a prefix argument when toggling this mode (i.e., {{{kbd(C-u R)}}}),
   the clock table does not show contributions from entries that are
-  hidden by agenda filtering[fn:99].  See also the variable
-  ~org-clock-report-include-clocking-task~.
+  hidden by agenda filtering[fn:99].  See also the variables
+  ~org-clock-report-include-clocking-task~ and ~org-agenda-clock-report-header~.
 
 - {{{kbd(v c)}}} ::
 
@@ -13572,7 +13578,12 @@ include:
 
   The table environments by default are not floats in LaTeX.  To make
   them floating objects use =:float= with one of the following
-  options: =sideways=, =multicolumn=, =t=, and =nil=.
+  options: =t= (for a default =table= environment), =sideways= (for a
+  =sidewaystable= environment), =multicolumn= (to span the table
+  across multiple columns of a page in a =table*= environment) and
+  =nil=.  In addition to these three values, =:float= can pass through
+  any arbitrary value, for example a user-defined float type with the
+  =float= LaTeX package.
 
   LaTeX floats can also have additional layout =:placement=
   attributes.  These are the usual =[h t b p ! H]= permissions
@@ -13686,8 +13697,7 @@ attribute to one of the following:
 
 - =t= ::
 
-  For a standard =figure= environment; used by default whenever an
-  image has a caption.
+  For a default =figure= environment.
 
 - =multicolumn= ::
 
@@ -13707,6 +13717,12 @@ attribute to one of the following:
 - =nil= ::
 
   To avoid a =:float= even if using a caption.
+
+- Any arbitrary value ::
+
+  For example, a user-defined float type with the =float= LaTeX
+  package.
+
 
 Use the =placement= attribute to modify a floating environment's
 placement.
@@ -15236,6 +15252,23 @@ This paragraph is preceded by...
 :DESCRIPTION: List attributes.
 :END:
 
+#+cindex: lettered lists, in Texinfo export
+#+cindex: enum, Texinfo attribute
+The Texinfo export back-end converts unordered and ordered lists in
+the Org file using the default command =@itemize=.
+
+Ordered lists are numbered when exported to Texinfo format.  Such
+numbering obeys any counter (see [[*Plain Lists]]) in the first item of
+the list.  The =:enum= attribute also let you start the list at a
+specific number, or switch to a lettered list, as illustrated here:
+
+#+begin_example
+#+ATTR_TEXINFO: :enum A
+1. Alpha
+2. Bravo
+3. Charlie
+#+end_example
+
 #+cindex: @samp{ATTR_TEXINFO}, keyword
 #+cindex: two-column tables, in Texinfo export
 #+cindex: table-type, Texinfo attribute
@@ -15277,19 +15310,88 @@ This is the common text for variables foo and bar.
 @end table
 #+end_example
 
-#+cindex: lettered lists, in Texinfo export
-#+cindex: enum, Texinfo attribute
-Ordered lists are numbered when exported to Texinfo format.  Such
-numbering obeys any counter (see [[*Plain Lists]]) in the first item of
-the list.  The =:enum= attribute also let you start the list at
-a specific number, or switch to a lettered list, as illustrated here
+The =:compact= attribute is an alternative to the =:sep= attribute,
+which allows writing each entry on its own line.  If this attribute is
+non-nil and an item in a description list has no body but is followed
+by another item, then the second item is transcoded to =@itemx=.  This
+example is transcoded to the same output as above.
 
 #+begin_example
-#+ATTR_TEXINFO: :enum A
-1. Alpha
-2. Bravo
-3. Charlie
+,#+ATTR_TEXINFO: :table-type vtable :indic asis :compact t
+- foo ::
+- bar ::
+  This is the common text for variables foo and bar.
 #+end_example
+
+Support for this compact syntax can also be enabled for all lists in
+a file using the =compact-itemx= export option, or globally using the
+variable ~org-texinfo-compact-itemx~.
+
+The Texinfo export back-end also supports two approaches to writing
+Texinfo definition commands (see [[info:texinfo::Definition Commands]]).
+One of them uses description lists and is described below, the other
+relies on special blocks (see [[*Special blocks in Texinfo export]]).
+
+Items in a description list in a Org file that begin with =Function:=
+or certain other prefixes are converted using Texinfo definition
+commands.  This works even if other items in the same list do not have
+such a prefix; if necessary a single description list is converted
+using multiple tables (such as =@vtable=) and definition commands
+(such as =@defun=).
+
+#+begin_example
+- Function: org-texinfo-drawer drawer contents info ::
+  Transcode a DRAWER element from Org to Texinfo.
+#+end_example
+
+#+texinfo: @noindent
+becomes
+
+#+begin_example
+@defun org-texinfo-drawer drawer contents info ::
+  Transcode a DRAWER element from Org to Texinfo.
+@end defun
+#+end_example
+
+The recognized prefixes are =Command:=, =Function:=, =Macro:=,
+=Special Form:=, =Variable:= and =User Option:=.  These are the same
+prefixes that appear in the Info file for the respective definition
+commands.  For example a =Function:= item in the Org file is converted
+to a =@defun= command in the Texinfo file, which in turn is converted
+to a definition prefixed with =-- Function:= in the Info file.
+
+As a special case the prefix =Key:= is also recognized.  No Texinfo
+definition command exists for key bindings and the output in Info
+files also lacks the =Key:= prefix.  Even so this special case is
+supported because it provides a convenient shorthand, as illustrated
+here:
+
+#+begin_example
+- Key: C-c C-c (do-something) ::
+  This command does something.
+
+- User Option: do-something-somehow ::
+  This option controls how exactly ~do-something~ does its thing.
+#+end_example
+
+#+texinfo: @noindent
+becomes
+
+#+begin_example
+@table @asis
+@item @kbd{C-c C-c} (@code{do-something})
+@kindex C-c C-c
+@findex do-something
+This command does something.
+@end table
+
+@defopt do-something-somehow
+This option controls how exactly @code{do-something} does its thing.
+@end defopt
+#+end_example
+
+#+texinfo: @noindent
+Command in parenthesis, as done above, is optional.
 
 *** Tables in Texinfo export
 :PROPERTIES:
@@ -15353,10 +15455,41 @@ your king.
 ,#+END_QUOTE
 #+end_example
 
+*** Key bindings in Texinfo export
+:PROPERTIES:
+:DESCRIPTION: @@kbd Texinfo command.
+:END:
+
+Org does not provide any markup for key bindings that corresponds to
+Texinfo's ~@kbd~ and ~@key~ commands.  One way to deal with this is to
+fall back to code syntax.  =~C-x SPC~=, for example, is transcoded to
+~@code{C-x SPC}~.
+
+A better approach is to define and use an Org macro named ~kbd~.  To
+make that easier the function ~org-texinfo-kbd-macro~ is provided,
+which is intended to be used like this:
+
+#+begin_example
+#+macro: kbd (eval (org-texinfo-kbd-macro $1))
+
+Type {{{kbd(C-c SPC)}}}.
+#+end_example
+
+#+texinfo: @noindent
+which becomes
+
+#+begin_example
+Type @kbd{C-c @key{SPC}}.
+#+end_example
+
 *** Special blocks in Texinfo export
 :PROPERTIES:
 :DESCRIPTION: Special block attributes.
 :END:
+
+The Texinfo export back-end supports two approaches to writing Texinfo
+definition commands.  One of them is described here, the other in
+[[*Plain lists in Texinfo export]].
 
 #+cindex: @samp{ATTR_TEXINFO}, keyword
 
@@ -15586,7 +15719,7 @@ for usage and configuration details.
 :DESCRIPTION: Fine-tuning the export output.
 :END:
 
-*** Hooks
+*** Export hooks
 :PROPERTIES:
 :UNNUMBERED: notoc
 :END:
@@ -16219,6 +16352,7 @@ Settings]]), however, override everything.
 | ~:texinfo-active-timestamp-format~       | ~org-texinfo-active-timestamp-format~       |
 | ~:texinfo-classes~                       | ~org-texinfo-classes~                       |
 | ~:texinfo-class~                         | ~org-texinfo-default-class~                 |
+| ~:texinfo-compact-itemx                  | ~org-texinfo-compact-itemx~                 |
 | ~:texinfo-table-default-markup~          | ~org-texinfo-table-default-markup~          |
 | ~:texinfo-diary-timestamp-format~        | ~org-texinfo-diary-timestamp-format~        |
 | ~:texinfo-filename~                      | ~org-texinfo-filename~                      |
@@ -18242,7 +18376,7 @@ expanded anyway.
   #+kindex: C-c C-v f
   Choose a file to tangle.  Bound to {{{kbd(C-c C-v f)}}}.
 
-*** Hooks
+*** Tangle hooks
 :PROPERTIES:
 :UNNUMBERED: notoc
 :END:
@@ -21641,7 +21775,7 @@ that are mentioned in the manual.  For a more complete list, use
 
 This manual is for Org version {{{version}}}.
 
-Copyright \copy 2004--2021 Free Software Foundation, Inc.
+Copyright \copy 2004--2022 Free Software Foundation, Inc.
 
 #+begin_quote
 Permission is granted to copy, distribute and/or modify this document

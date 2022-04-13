@@ -1,6 +1,6 @@
 ;;; org-compat.el --- Compatibility Code for Older Emacsen -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -30,6 +30,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 (require 'org-macs)
 
 (declare-function org-agenda-diary-entry "org-agenda")
@@ -751,6 +752,10 @@ context.  See the individual commands for more information."
 
 (define-obsolete-function-alias 'org-get-last-sibling 'org-get-previous-sibling "9.4")
 
+(define-obsolete-function-alias 'org-truely-invisible-p
+  'org-truly-invisible-p "9.6"
+  "Compatibility alias for legacy misspelling of `org-truly-invisible-p'.")
+
 ;;;; Obsolete link types
 
 (eval-after-load 'ol
@@ -900,7 +905,6 @@ attention to case differences."
 (defcustom org-imenu-depth 2
   "The maximum level for Imenu access to Org headlines.
 This also applied for speedbar access."
-  :group 'org-imenu-and-speedbar
   :type 'integer)
 
 ;;;; Imenu
@@ -1026,9 +1030,9 @@ ELEMENT is the element at point."
     (cl-case (org-element-type object)
       ;; Prevent checks in links due to keybinding conflict with
       ;; Flyspell.
-      ((code entity export-snippet inline-babel-call
-	     inline-src-block line-break latex-fragment link macro
-	     statistics-cookie target timestamp verbatim)
+      ((citation citation-reference code entity export-snippet inline-babel-call
+	         inline-src-block line-break latex-fragment link macro
+	         statistics-cookie target timestamp verbatim)
        nil)
       (footnote-reference
        ;; Only in inline footnotes, within the definition.
@@ -1113,7 +1117,7 @@ ELEMENT is the element at point."
 
 ;;;; Bookmark
 
-(defun org-bookmark-jump-unhide ()
+(defun org-bookmark-jump-unhide (&rest _)
   "Unhide the current position, to show the bookmark location."
   (and (derived-mode-p 'org-mode)
        (or (org-invisible-p)
@@ -1122,7 +1126,7 @@ ELEMENT is the element at point."
        (org-show-context 'bookmark-jump)))
 
 ;; Make `bookmark-jump' shows the jump location if it was hidden.
-(add-hook 'bookmark-after-jump-hook 'org-bookmark-jump-unhide)
+(add-hook 'bookmark-after-jump-hook #'org-bookmark-jump-unhide)
 
 ;;;; Calendar
 
@@ -1175,42 +1179,29 @@ key."
 ;;;; Saveplace
 
 ;; Make sure saveplace shows the location if it was hidden
-(eval-after-load 'saveplace
-  '(defadvice save-place-find-file-hook (after org-make-visible activate)
-     "Make the position visible."
-     (org-bookmark-jump-unhide)))
+(advice-add 'save-place-find-file-hook :after #'org-bookmark-jump-unhide)
 
 ;;;; Ecb
 
 ;; Make sure ecb shows the location if it was hidden
-(eval-after-load 'ecb
-  '(defadvice ecb-method-clicked (after esf/org-show-context activate)
-     "Make hierarchy visible when jumping into location from ECB tree buffer."
-     (when (derived-mode-p 'org-mode)
-       (org-show-context))))
+(advice-add 'ecb-method-clicked :after #'org--ecb-show-context)
+(defun org--ecb-show-context (&rest _)
+  "Make hierarchy visible when jumping into location from ECB tree buffer."
+  (when (derived-mode-p 'org-mode)
+    (org-show-context)))
 
 ;;;; Simple
 
-(defun org-mark-jump-unhide ()
+(defun org-mark-jump-unhide (&rest _)
   "Make the point visible with `org-show-context' after jumping to the mark."
   (when (and (derived-mode-p 'org-mode)
 	     (org-invisible-p))
     (org-show-context 'mark-goto)))
 
-(eval-after-load 'simple
-  '(defadvice pop-to-mark-command (after org-make-visible activate)
-     "Make the point visible with `org-show-context'."
-     (org-mark-jump-unhide)))
+(advice-add 'pop-to-mark-command :after #'org-mark-jump-unhide)
 
-(eval-after-load 'simple
-  '(defadvice exchange-point-and-mark (after org-make-visible activate)
-     "Make the point visible with `org-show-context'."
-     (org-mark-jump-unhide)))
-
-(eval-after-load 'simple
-  '(defadvice pop-global-mark (after org-make-visible activate)
-     "Make the point visible with `org-show-context'."
-     (org-mark-jump-unhide)))
+(advice-add 'exchange-point-and-mark :after #'org-mark-jump-unhide)
+(advice-add 'pop-global-mark :after #'org-mark-jump-unhide)
 
 ;;;; Session
 

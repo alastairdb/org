@@ -1,6 +1,6 @@
 ;;; org-clock.el --- The time clocking code for Org mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -36,6 +36,7 @@
 (declare-function org-element-property "org-element" (property element))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-element--cache-active-p "org-element" ())
+(defvar org-element-use-cache)
 (declare-function org-inlinetask-at-task-p "org-inlinetask" ())
 (declare-function org-inlinetask-goto-beginning "org-inlinetask" ())
 (declare-function org-inlinetask-goto-end "org-inlinetask" ())
@@ -1266,7 +1267,7 @@ time as the start time.  See `org-clock-continuously' to make this
 the default behavior."
   (interactive "P")
   (setq org-clock-notification-was-shown nil)
-  (unless (org-element--cache-active-p)
+  (unless org-element-use-cache
     (org-refresh-effort-properties))
   (catch 'abort
     (let ((interrupting (and (not org-clock-resolving-clocks-due-to-idleness)
@@ -1749,7 +1750,7 @@ Optional argument N tells to change by that many units."
   (org-clock-timestamps-change 'up n))
 
 (defun org-clock-timestamps-down (&optional n)
-  "Increase CLOCK timestamps at cursor.
+  "Decrease CLOCK timestamps at cursor.
 Optional argument N tells to change by that many units."
   (interactive "P")
   (org-clock-timestamps-change 'down n))
@@ -2508,7 +2509,7 @@ the currently selected interval size."
       (when step
 	;; Write many tables, in steps
 	(unless (or block (and ts te))
-	  (user-error "Clocktable `:step' can only be used with `:block' or `:tstart, :end'"))
+	  (user-error "Clocktable `:step' can only be used with `:block' or `:tstart', `:tend'"))
 	(org-clocktable-steps params)
 	(throw 'exit nil))
 

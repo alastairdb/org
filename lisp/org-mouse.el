@@ -1,6 +1,6 @@
 ;;; org-mouse.el --- Better mouse support for Org -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2006-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2022 Free Software Foundation, Inc.
 
 ;; Author: Piotr Zielinski <piotr dot zielinski at gmail dot com>
 ;; Maintainer: Carsten Dominik <carsten.dominik@gmail.com>
@@ -295,7 +295,7 @@ nor a function, elements of KEYWORDS are used directly."
 	      ((functionp itemformat) (funcall itemformat keyword))
 	      ((stringp itemformat) (format itemformat keyword))
 	      (t keyword))
-	     (list 'funcall function keyword)
+	     `(funcall #',function ,keyword)
 	     :style (cond
 		     ((null selected) t)
 		     ((functionp selected) 'toggle)
@@ -580,15 +580,17 @@ This means, between the beginning of line and the point."
   (insert text)
   (beginning-of-line))
 
-(defadvice dnd-insert-text (around org-mouse-dnd-insert-text activate)
+(advice-add 'dnd-insert-text :around #'org--mouse-dnd-insert-text)
+(defun org--mouse-dnd-insert-text (orig-fun window action text &rest args)
   (if (derived-mode-p 'org-mode)
       (org-mouse-insert-item text)
-    ad-do-it))
+    (apply orig-fun window action text args)))
 
-(defadvice dnd-open-file (around org-mouse-dnd-open-file activate)
+(advice-add 'dnd-open-file :around #'org--mouse-dnd-open-file)
+(defun org--mouse-dnd-open-file (orig-fun uri &rest args)
   (if (derived-mode-p 'org-mode)
       (org-mouse-insert-item uri)
-    ad-do-it))
+    (apply orig-fun uri args)))
 
 (defun org-mouse-match-closure (function)
   (let ((match (match-data t)))

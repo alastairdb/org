@@ -1161,6 +1161,15 @@ Some other text
    (org-test-with-temp-text "Text[fn::def]"
      (org-element-map
 	 (org-element-parse-buffer) 'footnote-reference 'identity)))
+  ;; Parse inline references with syntax loaded characters.
+  (should
+   (eq 'footnote-reference
+       (org-test-with-temp-text "Text[fn<point>::(def]"
+         (org-element-type (org-element-context)))))
+  (should
+   (eq 'footnote-reference
+       (org-test-with-temp-text "Text[fn<point>::\"def]"
+         (org-element-type (org-element-context)))))
   ;; Parse nested footnotes.
   (should
    (= 2
@@ -3759,7 +3768,24 @@ Text
   (should
    (org-test-with-temp-text "* H\n"
      (forward-line)
-     (or (org-element-at-point) t))))
+     (or (org-element-at-point) t)))
+  ;; Return greater element when ouside contents.
+  (should
+   (eq 'drawer
+       (org-test-with-temp-text
+        ":DRAWER:\ntest\n:EN<point>D:\n"
+        (org-element-type (org-element-at-point)))))
+  (should
+   (eq 'drawer
+       (org-test-with-temp-text
+        ":DRA<point>WER:\ntest\n:END:\n"
+        (org-element-type (org-element-at-point)))))
+  ;; Return greater element when at :contents-end.
+  (should
+   (eq 'drawer
+       (org-test-with-temp-text
+        ":DRAWER:\ntest\n<point>:END:\n"
+        (org-element-type (org-element-at-point))))))
 
 (ert-deftest test-org-element/context ()
   "Test `org-element-context' specifications."
@@ -3866,7 +3892,7 @@ Text
   ;; `org-element-at-point' or `org-element-context', the list is
   ;; limited to the current section.
   (should
-   (equal '(paragraph center-block section headline)
+   (equal '(paragraph center-block section headline headline org-data)
 	  (org-test-with-temp-text
 	      "* H1\n** H2\n#+BEGIN_CENTER\n*bold<point>*\n#+END_CENTER"
 	    (mapcar #'car (org-element-lineage (org-element-context))))))
@@ -3891,7 +3917,7 @@ Text
      (org-element-lineage (org-element-context) '(example-block))))
   ;; Test WITH-SELF optional argument.
   (should
-   (equal '(bold paragraph center-block section headline)
+   (equal '(bold paragraph center-block section headline headline org-data)
 	  (org-test-with-temp-text
 	      "* H1\n** H2\n#+BEGIN_CENTER\n*bold<point>*\n#+END_CENTER"
 	    (mapcar #'car (org-element-lineage (org-element-context) nil t)))))
@@ -4004,6 +4030,15 @@ Text
 	 (equal (cons (org-element-property :begin element)
 		      (org-element-property :end element))
 		(cons (point-min) (point-max)))))))
+  (org-test-with-temp-text ":DRAWER:\ntest\n:END:\n <point>#\nParagraph"
+    (let ((org-element-use-cache t))
+      (org-element-cache-map #'ignore :granularity 'element)
+      (should (eq 'comment (org-element-type (org-element-at-point))))
+      (should (eq 0 (org-element-property :post-blank (org-element-at-point (point-min)))))
+      (insert " ") (delete-char -1)
+      (org-element-cache-map #'ignore :granularity 'element)
+      (delete-char 1)
+      (should (eq 1 (org-element-property :post-blank (org-element-at-point (point-min)))))))
   ;; Sensitive change: adding a line alters document structure both
   ;; above and below.
   (should
@@ -4045,6 +4080,56 @@ Text
 	   (delete-char -1)
 	   (search-backward "Para1")
 	   (org-element-type (org-element-at-point))))))
+  ;; Make sure that we do not generate intersecting elements.
+  (should (eq 'paragraph
+              (org-test-with-temp-text ":DRAWER:\nP1\n<point>\n:END:\n#+END_EXAMPLE"
+                (let ((org-element-use-cache t))
+                  (org-element-at-point (point-max))
+                  (org-element-at-point)
+                  (insert "#+BEGIN_EXAMPLE")
+                  (org-element-type (org-element-at-point))))))
+  ;; But yet correctly slurp obsolete elements inside a new element.
+  (should (eq 'example-block
+              (org-test-with-temp-text ":DRAWER:\nP1\n<point>\nP2\n#+END_EXAMPLE\n:END:"
+                (let ((org-element-use-cache t))
+                  (org-element-at-point (point-max))
+                  (save-excursion
+                    (re-search-forward "P2")
+                    (should (eq 'paragraph (org-element-type (org-element-at-point))))
+                    (re-search-forward "END_")
+                    (should (eq 'paragraph (org-element-type (org-element-at-point)))))
+                  (insert "#+BEGIN_EXAMPLE")
+                  (re-search-forward "P2")
+                  (should (eq 'example-block (org-element-type (org-element-at-point))))
+                  (re-search-forward "END_")
+                  (org-element-type (org-element-at-point))))))
+  ;; Test edits near :end of element
+  (should-not (eq 'headline
+                  (org-test-with-temp-text "* H1\nP1\n<point>*H2\n"
+                    (let ((org-element-use-cache t))
+                      (org-element-cache-map #'ignore :granularity 'element)
+                      (insert "Blah")
+                      (org-element-type (org-element-at-point))))))
+  (should-not (eq 'headline
+                  (org-test-with-temp-text "* H1\nP1\n<point>*H2\n"
+                    (let ((org-element-use-cache t))  
+                      (org-element-cache-map #'ignore :granularity 'element)
+                      (backward-delete-char 1)
+                      (org-element-type (org-element-at-point))))))
+  (org-test-with-temp-text "Paragraph.\n #<point> comment"
+    (let ((org-element-use-cache t))
+      (org-element-cache-map #'ignore :granularity 'element)
+      (should (eq 'comment (org-element-type (org-element-at-point))))
+      (insert "not comment anymore")
+      (org-element-cache-map #'ignore :granularity 'element)
+      (should-not (eq 'comment (org-element-type (org-element-at-point))))
+      (should (eq (org-element-at-point) (org-element-at-point 1)))))
+  (should (eq 'headline
+              (org-test-with-temp-text "* H1\nP1\n<point>* H2\n"
+                (let ((org-element-use-cache t))
+                  (org-element-cache-map #'ignore :granularity 'element)
+                  (insert "Blah\n")
+                  (org-element-type (org-element-at-point))))))
   ;; Corner case: watch out drawers named "PROPERTIES" as they are
   ;; fragile, unlike to other drawers.
   (should
@@ -4069,8 +4154,22 @@ Text
 	    :end (org-element-property :parent (org-element-at-point)))
 	   (+ parent-end 3))))))
 
-(ert-deftest test-org-element/cache-bugs ()
-  "Test basic expectations and common pitfalls for cache."
+(ert-deftest test-org-element/cache-affiliated ()
+  "Test updating affiliated keywords."
+  ;; Inserting a line right after other keywords.
+  (let ((org-element-use-cache t))
+    (org-test-with-temp-text "
+#+caption: test
+#+name: test
+<point>
+line"
+      (org-element-cache-map #'ignore :granularity 'element)
+      (should (eq 'keyword (org-element-type (org-element-at-point))))
+      (insert "#")
+      (should (eq 2 (org-element-property :begin (org-element-at-point)))))))
+
+(ert-deftest test-org-element/cache-table ()
+  "Test handling edits in tables."
   ;; Unindented second row of the table should not be re-parented by
   ;; inserted item.
   (should

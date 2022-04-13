@@ -1,6 +1,6 @@
 ;;; ox.el --- Export Framework for Org Mode          -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2012-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 ;; Maintainer: Nicolas Goaziou <mail@nicolasgoaziou.fr>
@@ -75,7 +75,6 @@
 (require 'cl-lib)
 (require 'ob-exp)
 (require 'oc)
-(require 'oc-basic)    ;default value for `org-cite-export-processors'
 (require 'ol)
 (require 'org-element)
 (require 'org-macro)
@@ -634,7 +633,7 @@ This option can also be set with the SELECT_TAGS keyword."
 (defcustom org-export-with-smart-quotes nil
   "Non-nil means activate smart quotes during export.
 This option can also be set with the OPTIONS keyword,
-e.g., \"':t\".
+e.g., \"\\=':t\".
 
 When setting this to non-nil, you need to take care of
 using the correct Babel package when exporting to LaTeX.
@@ -4447,6 +4446,49 @@ Return value can be an object or an element:
 	   (concat (if (string-prefix-p "/" fullname) "file://" "file:///")
 		   fullname)))))
 
+(defun org-export-link-remote-p (link)
+  "Returns non-nil if the link refers to a remote resource."
+  (or (member (org-element-property :type link) '("http" "https" "ftp"))
+      (and (string= (org-element-property :type link) "file")
+           (file-remote-p (org-element-property :path link)))))
+
+(defun org-export-link--remote-local-copy (link)
+  "Download the remote resource specified by LINK, and return its local path."
+  ;; TODO work this into ol.el as a link parameter, say :download.
+  (let* ((location-type
+          (pcase (org-element-property :type link)
+            ((or "http" "https" "ftp") 'url)
+            ((and "file" (guard (file-remote-p
+                                 (org-element-property :path link))))
+             'file)
+            (_ (error "Cannot copy %s:%s to a local file"
+                      (org-element-property :type link)
+                      (org-element-property :path link)))))
+         (path
+          (pcase location-type
+            ('url
+             (concat (org-element-property :type link)
+                     ":" (org-element-property :path link)))
+            ('file
+             (org-element-property :path link)))))
+    (or (org-persist-read location-type path)
+        (org-persist-register location-type path
+                              :write-immediately t))))
+
+(defun org-export-link-localise (link)
+  "Convert remote LINK to local link.
+If LINK refers to a remote resource, modify it to point to a local
+downloaded copy.  Otherwise, return unchanged LINK."
+  (when (org-export-link-remote-p link)
+    (let* ((local-path (org-export-link--remote-local-copy link)))
+      (setcdr link
+              (thread-first (cadr link)
+                            (plist-put :type "file")
+                            (plist-put :path local-path)
+                            (plist-put :raw-link (concat "file:" local-path))
+                            list))))
+  link)
+
 ;;;; For References
 ;;
 ;; `org-export-get-reference' associate a unique reference for any
@@ -6378,7 +6420,11 @@ use it to set a major mode there, e.g,
     (&optional async subtreep visible-only body-only ext-plist)
     (interactive)
     (org-export-to-buffer \\='latex \"*Org LATEX Export*\"
-      async subtreep visible-only body-only ext-plist (lambda () (LaTeX-mode))))
+      async subtreep visible-only body-only ext-plist
+      #'LaTeX-mode))
+
+When expressed as an anonymous function, using `lambda',
+POST-PROCESS needs to be quoted.
 
 This function returns BUFFER."
   (declare (indent 2))
@@ -6441,7 +6487,10 @@ to send the output file through additional processing, e.g,
     (let ((outfile (org-export-output-file-name \".tex\" subtreep)))
       (org-export-to-file \\='latex outfile
         async subtreep visible-only body-only ext-plist
-        (lambda (file) (org-latex-compile file)))
+        #'org-latex-compile)))
+
+When expressed as an anonymous function, using `lambda',
+POST-PROCESS needs to be quoted.
 
 The function returns either a file name returned by POST-PROCESS,
 or FILE."

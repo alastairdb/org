@@ -1,6 +1,6 @@
 ;;; oc-basic.el --- basic back-end for citations  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2021 Free Software Foundation, Inc.
+;; Copyright (C) 2021-2022 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 
@@ -68,6 +68,7 @@
 
 (require 'bibtex)
 (require 'json)
+(require 'map)
 (require 'oc)
 (require 'seq)
 
@@ -177,21 +178,29 @@ Return a hash table with citation references as keys and fields alist as values.
                                      " and ")))
                              ('issued
                               ;; Date are expressed as an array
-                              ;; (`date-parts') or a "string (`raw').
-                              ;; In both cases, extract the year and
-                              ;; associate it to `year' field, for
-                              ;; compatibility with BibTeX format.
+                              ;; (`date-parts') or a "string (`raw'
+                              ;; or `literal'). In both cases,
+                              ;; extract the year and associate it
+                              ;; to `year' field, for compatibility
+                              ;; with BibTeX format.
                               (let ((date (or (alist-get 'date-parts value)
+                                              (alist-get 'literal value)
                                               (alist-get 'raw value))))
                                 (cons 'year
                                       (cond
                                        ((consp date)
                                         (caar date))
                                        ((stringp date)
-                                        (car (split-string date "-")))
+                                        (replace-regexp-in-string
+                                          (rx
+                                            (minimal-match (zero-or-more anything))
+                                            (group-n 1 (repeat 4 digit))
+                                            (zero-or-more anything))
+                                          (rx (backref 1))
+                                          date))
                                        (t
                                         (error "Unknown CSL-JSON date format: %S"
-                                               date))))))
+                                               value))))))
                              (_
                               (cons field value))))
                          item)
@@ -339,6 +348,17 @@ This is used for disambiguation."
                         ((= n 27) (throw :complete (cons 0 (cons 0 result))))
                         (t nil))))))))
 
+(defun org-cite-basic--get-author (entry-or-key &optional info raw)
+  "Return author associated to ENTRY-OR-KEY.
+
+ENTRY-OR-KEY, INFO and RAW arguments are the same arguments as
+used in `org-cite-basic--get-field', which see.
+
+Author is obtained from the \"author\" field, if available, or
+from the \"editor\" field otherwise."
+  (or (org-cite-basic--get-field 'author entry-or-key info raw)
+      (org-cite-basic--get-field 'editor entry-or-key info raw)))
+
 (defun org-cite-basic--get-year (entry-or-key info &optional no-suffix)
   "Return year associated to ENTRY-OR-KEY.
 
@@ -362,7 +382,7 @@ necessary, unless optional argument NO-SUFFIX is non-nil."
   ;; KEY-SUFFIX-ALIST is an association (KEY . SUFFIX), where KEY is
   ;; the cite key, as a string, and SUFFIX is the generated suffix
   ;; string, or the empty string.
-  (let* ((author (org-cite-basic--get-field 'author entry-or-key info 'raw))
+  (let* ((author (org-cite-basic--get-author entry-or-key info 'raw))
          (year
           (or (org-cite-basic--get-field 'year entry-or-key info 'raw)
               (let ((date
@@ -398,7 +418,7 @@ necessary, unless optional argument NO-SUFFIX is non-nil."
   "Format ENTRY according to STYLE string.
 ENTRY is an alist, as returned by `org-cite-basic--get-entry'.
 Optional argument INFO is the export state, as a property list."
-  (let ((author (org-cite-basic--get-field 'author entry info))
+  (let ((author (org-cite-basic--get-author entry info))
         (title (org-cite-basic--get-field 'title entry info))
         (from
          (or (org-cite-basic--get-field 'publisher entry info)
@@ -526,7 +546,7 @@ INFO is the export state, as a property list."
                      (suffix (org-element-property :suffix ref)))
                  (funcall format-ref
                           prefix
-                          (org-cite-basic--get-field 'author k info)
+                          (org-cite-basic--get-author k info)
                           (org-cite-basic--get-year k info)
                           suffix)))
              (org-cite-get-references citation)
@@ -598,7 +618,7 @@ export communication channel, as a property list."
          (org-export-data
           (mapconcat
            (lambda (key)
-             (let ((author (org-cite-basic--get-field 'author key info)))
+             (let ((author (org-cite-basic--get-author key info)))
                (if caps (capitalize author) author)))
            (org-cite-get-references citation t)
            org-cite-basic-author-year-separator)
@@ -719,16 +739,23 @@ Return chosen style as a string."
 
 (defun org-cite-basic--key-completion-table ()
   "Return completion table for cite keys, as a hash table.
-In this hash table, keys are a strings with author, date, and title of the
-reference.  Values are the cite key."
-  (let ((cache-key (mapcar #'car org-cite-basic--bibliography-cache)))
-    (if (gethash cache-key org-cite-basic--completion-cache)
-        org-cite-basic--completion-cache
+
+In this hash table, keys are a strings with author, date, and
+title of the reference.  Values are the cite keys.
+
+Return nil if there are no bibliography files or no entries."
+  ;; Populate bibliography cache.
+  (let ((entries (org-cite-basic--parse-bibliography)))
+    (cond
+     ((null entries) nil)               ;no bibliography files
+     ((gethash entries org-cite-basic--completion-cache)
+      org-cite-basic--completion-cache)
+     (t
       (clrhash org-cite-basic--completion-cache)
       (dolist (key (org-cite-basic--all-keys))
         (let ((completion
                (concat
-                (let ((author (org-cite-basic--get-field 'author key nil t)))
+                (let ((author (org-cite-basic--get-author key nil 'raw)))
                   (if author
                       (truncate-string-to-width
                        (replace-regexp-in-string " and " "; " author)
@@ -740,14 +767,16 @@ reference.  Values are the cite key."
                 org-cite-basic-column-separator
                 (org-cite-basic--get-field 'title key nil t))))
           (puthash completion key org-cite-basic--completion-cache)))
-      (puthash cache-key t org-cite-basic--completion-cache)
-      org-cite-basic--completion-cache)))
+      (unless (map-empty-p org-cite-basic--completion-cache) ;no key
+        (puthash entries t org-cite-basic--completion-cache)
+        org-cite-basic--completion-cache)))))
 
 (defun org-cite-basic--complete-key (&optional multiple)
   "Prompt for a reference key and return a citation reference string.
 
-When optional argument MULTIPLE is non-nil, prompt for multiple keys, until one
-of them is nil.  Then return the list of reference strings selected.
+When optional argument MULTIPLE is non-nil, prompt for multiple
+keys, until one of them is nil.  Then return the list of
+reference strings selected.
 
 Raise an error when no bibliography is set in the buffer."
   (let* ((table
@@ -763,9 +792,9 @@ Raise an error when no bibliography is set in the buffer."
              (build-prompt
               (lambda ()
                 (if keys
-                    (format "Key (\"\" to exit) %s: "
+                    (format "Key (empty input exits) %s: "
                             (mapconcat #'identity (reverse keys) ";"))
-                  "Key (\"\" to exit): "))))
+                  "Key (empty input exits): "))))
         (let ((key (funcall prompt (funcall build-prompt))))
           (while (org-string-nw-p key)
             (push (gethash key table) keys)

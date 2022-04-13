@@ -1,6 +1,6 @@
 ;;; org-faces.el --- Face definitions -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -457,6 +457,10 @@ verse and quote blocks are fontified using the `org-verse' and
 
 (defface org-block-end-line '((t (:inherit org-block-begin-line)))
   "Face used for the line delimiting the end of source blocks."
+  :group 'org-faces)
+
+(defface org-inline-src-block '((t (:inherit org-block)))
+  "Face used for inline source blocks as a whole."
   :group 'org-faces)
 
 (defface org-verbatim '((t (:inherit (fixed-pitch shadow))))
