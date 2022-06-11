@@ -2915,6 +2915,18 @@ Foo Bar
      (org-open-at-point)
      (eq (org-element-type (org-element-context)) 'radio-target))))
 
+(ert-deftest test-org/open-at-point/radio-target-shadowed ()
+  "Test `org-open-at-point' on shadowed radio targets."
+  (should
+   (org-test-with-temp-text
+       "<<<target shadowed>>> <<<target>>> <point>target shadowed"
+     (org-update-radio-target-regexp)
+     (org-open-at-point)
+     (string=
+      (org-element-property :value
+                            (org-element-radio-target-parser))
+      "target shadowed"))))
+
 (ert-deftest test-org/open-at-point/tag ()
   "Test `org-open-at-point' on tags."
   (should
@@ -5439,6 +5451,23 @@ Paragraph<point>"
 	      (org-deadline nil "<2012-03-29 Tue +2y>"))
 	    (replace-regexp-in-string
 	     "\\( [.A-Za-z]+\\) " "" (buffer-string) nil nil 1))))
+  ;; Preserve warning period.
+  (should
+   (equal "* H\nDEADLINE: <2021-07-20 -1d>"
+	  (org-test-with-temp-text "* H"
+	    (let ((org-adapt-indentation nil)
+		  (org-last-inserted-timestamp nil))
+	      (org-deadline nil "<2021-07-20 Tue -1d>"))
+	    (replace-regexp-in-string
+	     "\\( [.A-Za-z]+\\) " "" (buffer-string) nil nil 1))))
+  (should
+   (equal "* H\nDEADLINE: <2021-07-20 +1m -3d>"
+	  (org-test-with-temp-text "* H"
+	    (let ((org-adapt-indentation nil)
+		  (org-last-inserted-timestamp nil))
+	      (org-deadline nil "<2021-07-20 Tue +1m -3d>"))
+	    (replace-regexp-in-string
+	     "\\( [.A-Za-z]+\\) " "" (buffer-string) nil nil 1))))
   ;; Remove CLOSED keyword, if any.
   (should
    (equal "* H\nDEADLINE: <2012-03-29>"
@@ -5997,7 +6026,35 @@ Paragraph<point>"
 	  (org-test-with-temp-text
 	      ":PROPERTIES:\n:A: 0\n:END:\n#+PROPERTY: A 1\n* H\n:PROPERTIES:\n:A+: 2\n:END:"
 	    (org-mode-restart)
-	    (org-entry-get (point-max) "A" t)))))
+	    (org-entry-get (point-max) "A" t))))
+  ;; Use alternate separators
+  (should
+   (equal "0~2"
+          (org-test-with-temp-text
+           ":PROPERTIES:\n:A: 0\n:A+: 2\n:END:"
+           (let ((org-property-separators '((("A") . "~"))))
+             (org-entry-get (point) "A")))))
+  ;; Default separator is single space
+  (should
+   (equal "0 2"
+          (org-test-with-temp-text
+           ":PROPERTIES:\n:A: 0\n:B: 1\n:A+: 2\n:B+: 3\n:END:"
+           (let ((org-property-separators '((("B") . "~"))))
+             (org-entry-get (point) "A")))))
+  ;; Regular expression matching for separator
+  (should
+   (equal "0/2"
+          (org-test-with-temp-text
+           ":PROPERTIES:\n:A: 0\n:A+: 2\n:END:"
+           (let ((org-property-separators '((("B") . "~") ("[AC]" . "/"))))
+             (org-entry-get (point) "A")))))
+  ;; Separator works with inheritance
+  (should
+   (equal "1~2"
+          (org-test-with-temp-text
+           "* H\n:PROPERTIES:\n:A: 1\n:END:\n** H2\n:PROPERTIES:\n:A+: 2\n:END:"
+           (let ((org-property-separators '((("A") . "~"))))
+             (org-entry-get (point-max) "A" t))))))
 
 (ert-deftest test-org/entry-properties ()
   "Test `org-entry-properties' specifications."

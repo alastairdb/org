@@ -181,7 +181,7 @@
 
 (defmacro org-element-with-disabled-cache (&rest body)
   "Run BODY without active org-element-cache."
-  (declare (debug (form body)) (indent 1))
+  (declare (debug (form body)) (indent 0))
   `(cl-letf (((symbol-function #'org-element--cache-active-p) (lambda (&rest _) nil)))
      ,@body))
 
@@ -587,7 +587,17 @@ ones and overrule settings in the other lists."
 
 (defconst org-unique-local-variables
   '(org-element--cache
-    org-element--cache-objects
+    org-element--headline-cache
+    org-element--cache-change-tic
+    org-element--cache-change-warning
+    org-element--cache-gapless
+    org-element--cache-hash-left
+    org-element--cache-hash-right
+    org-element--cache-size
+    org-element--headline-cache-size
+    org-element--cache-sync-keys-value
+    org-element--cache-diagnostics-ring
+    org-element--cache-diagnostics-ring-size
     org-element--cache-sync-keys
     org-element--cache-sync-requests
     org-element--cache-sync-timer)
@@ -1468,6 +1478,13 @@ window."
 	   (scroll-down nil)
 	 (message "Beginning of buffer")
 	 (sit-for 1))))))
+
+(cl-defun org-knuth-hash (number &optional (base 32))
+  "Calculate Knuth's multiplicative hash for NUMBER.
+BASE is the maximum bitcount.
+Credit: https://stackoverflow.com/questions/11871245/knuth-multiplicative-hash#41537995"
+  (cl-assert (and (<= 0 base 32)))
+  (ash (* number 2654435769) (- base 32)))
 
 (provide 'org-macs)
 
