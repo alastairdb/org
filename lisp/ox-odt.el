@@ -32,6 +32,10 @@
 (require 'ox)
 (require 'table nil 'noerror)
 
+(declare-function org-at-heading-p "org" (&optional _))
+(declare-function org-back-to-heading "org" (&optional invisible-ok))
+(declare-function org-next-visible-heading "org" (arg))
+
 ;;; Define Back-End
 
 (org-export-define-backend 'odt
@@ -404,7 +408,7 @@ with GNU ELPA tar or standard Emacs distribution."
     "Set `org-odt-schema-dir'.
 Also add it to `rng-schema-locating-files'."
     (let ((schema-dir value))
-      (set var
+      (set-default-toplevel-value var
 	   (if (and
 		(file-expand-wildcards
 		 (expand-file-name "od-manifest-schema*.rnc" schema-dir))

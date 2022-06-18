@@ -235,7 +235,7 @@ interface or run the following code after updating it:
   :type '(choice (const :tag "dot like in \"2.\"" ?.)
 		 (const :tag "paren like in \"2)\"" ?\))
 		 (const :tag "both" t))
-  :set (lambda (var val) (set var val)
+  :set (lambda (var val) (set-default-toplevel-value var val)
 	 (when (featurep 'org-element) (org-element-update-syntax))))
 
 (defcustom org-list-allow-alphabetical nil
@@ -253,7 +253,7 @@ interface or run the following code after updating it:
   :group 'org-plain-lists
   :version "24.1"
   :type 'boolean
-  :set (lambda (var val) (set var val)
+  :set (lambda (var val) (set-default-toplevel-value var val)
 	 (when (featurep 'org-element) (org-element-update-syntax))))
 
 (defcustom org-list-two-spaces-after-bullet-regexp nil
@@ -2327,12 +2327,19 @@ is an integer, 0 means `-', 1 means `+' etc.  If WHICH is
 `previous', cycle backwards."
   (interactive "P")
   (unless (org-at-item-p) (error "Not at an item"))
-  (save-excursion
+  (let ((origin (point-marker)))
     (beginning-of-line)
     (let* ((struct (org-list-struct))
            (parents (org-list-parents-alist struct))
            (prevs (org-list-prevs-alist struct))
            (list-beg (org-list-get-first-item (point) struct prevs))
+           ;; Record relative point position to bullet beginning.
+           (origin-offset (- origin
+                             (+ (point) (org-list-get-ind (point) struct))))
+           ;; Record relative point position to bullet end.
+           (origin-offset2 (- origin
+                              (+ (point) (org-list-get-ind (point) struct)
+                                 (length (org-list-get-bullet (point) struct)))))
            (bullet (org-list-get-bullet list-beg struct))
 	   (alpha-p (org-list-use-alpha-bul-p list-beg struct prevs))
 	   (case-fold-search nil)
@@ -2378,7 +2385,24 @@ is an integer, 0 means `-', 1 means `+' etc.  If WHICH is
         (org-list-set-bullet list-beg struct (org-list-bullet-string new))
         (org-list-struct-fix-bul struct prevs)
         (org-list-struct-fix-ind struct parents)
-        (org-list-struct-apply-struct struct old-struct)))))
+        (org-list-struct-apply-struct struct old-struct))
+      (goto-char origin)
+      (setq struct (org-list-struct))
+      (cond
+       ((>= origin-offset2 0)
+        (beginning-of-line)
+        (move-marker origin (+ (point)
+                               (org-list-get-ind (point) struct)
+                               (length (org-list-get-bullet (point) struct))
+                               origin-offset2))
+        (goto-char origin))
+       ((>= origin-offset 0)
+        (beginning-of-line)
+        (move-marker origin (+ (point)
+                               (org-list-get-ind (point) struct)
+                               origin-offset))
+        (goto-char origin)))
+      (move-marker origin nil))))
 
 ;;;###autoload
 (define-minor-mode org-list-checkbox-radio-mode

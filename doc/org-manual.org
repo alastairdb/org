@@ -4488,7 +4488,7 @@ in the subtree (not just direct children), configure the variable
 include the word =recursive= into the value of the =COOKIE_DATA=
 property.
 
-#+begin_example org
+#+begin_example
 ,* Parent capturing statistics [2/20]
   :PROPERTIES:
   :COOKIE_DATA: todo recursive
@@ -15474,7 +15474,7 @@ make that easier the function ~org-texinfo-kbd-macro~ is provided,
 which is intended to be used like this:
 
 #+begin_example
-#+macro: kbd (eval (org-texinfo-kbd-macro $1))
+,#+macro: kbd (eval (org-texinfo-kbd-macro $1))
 
 Type {{{kbd(C-c SPC)}}}.
 #+end_example
@@ -17541,6 +17541,13 @@ directory with {{{kbd(M-x cd RET DIRECTORY)}}}, and then not setting
 =dir=.  Under the surface, =dir= simply sets the value of the Emacs
 variable ~default-directory~.  Setting =mkdirp= header argument to
 a non-~nil~ value creates the directory, if necessary.
+
+Setting =dir= to the symbol ~attach~ or the string ~"'attach"~ will
+set =dir= to the directory returned by ~(org-attach-dir)~, set =:mkdir
+yes=, and insert any file paths, as when using =:results file=, which
+are under the node's attachment directory using =attachment:= links
+instead of the usual =file:= links.  Any returned path outside of the
+attachment directory will use =file:= links as per usual.
 
 For example, to save the plot file in the =Work/= folder of the home
 directory---notice tilde is expanded:
