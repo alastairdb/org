@@ -369,7 +369,7 @@ stopped."
 	       ;; At an headline, define new value for LEVEL.
 	       (unless (eq type 'inlinetask) (setq level nstars))))
 	    ;; List item: `wrap-prefix' is set where body starts.
-	    ((org-at-item-p)
+	    ((condition-case nil (org-at-item-p) (error nil))
 	     (org-indent-set-line-properties
 	      level (org-list-item-body-column (point))))
 	    ;; Regular line.
