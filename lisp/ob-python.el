@@ -307,47 +307,52 @@ already been configured as such, do nothing.  Return the
 initialized session."
   (save-window-excursion
     (let* ((session (if session (intern session) :default))
-           (py-buffer (org-babel-session-buffer:python session))
-           (python-shell-buffer-name
-	    (org-babel-python-without-earmuffs py-buffer))
-           (existing-session-p (comint-check-proc py-buffer))
-           (cmd (org-babel-python--command t)))
-      (if cmd
-          (let* ((cmd-split (split-string-and-unquote cmd))
-                 (python-shell-interpreter (car cmd-split))
-                 (python-shell-interpreter-args
-                  (combine-and-quote-strings
-                   (append (cdr cmd-split)
-                           (when (member system-type
-                                         '(cygwin windows-nt ms-dos))
-                             (list "-i"))))))
-            (run-python))
-        (run-python))
-      (with-current-buffer py-buffer
-        (if existing-session-p
-            ;; Session was created outside Org.  Assume first prompt
-            ;; already happened; run session setup code directly
-            (unless org-babel-python--initialized
-              ;; Ensure first prompt. Based on python-tests.el
-              ;; (`python-tests-shell-wait-for-prompt')
-              (while (not (org-babel-python--python-util-comint-end-of-output-p))
-                (sit-for 0.1))
-              (org-babel-python--setup-session))
-          ;; Adding to `python-shell-first-prompt-hook' immediately
-          ;; after `run-python' should be safe from race conditions,
-          ;; because subprocess output only arrives when Emacs is
-          ;; waiting (see elisp manual, "Output from Processes")
-          (add-hook
-           'python-shell-first-prompt-hook
-           #'org-babel-python--setup-session
-           nil 'local)))
-      ;; Wait until Python initializes
-      ;; This is more reliable compared to
-      ;; `org-babel-comint-wait-for-output' as python may emit
-      ;; multiple prompts during initialization.
-      (with-current-buffer py-buffer
-        (while (not org-babel-python--initialized)
-          (sleep-for 0.010)))
+           (py-buffer (or (org-babel-python-session-buffer session)
+                          (org-babel-python-with-earmuffs session)))
+	   (cmd (if (member system-type '(cygwin windows-nt ms-dos))
+		    (concat org-babel-python-command " -i")
+		  org-babel-python-command)))
+      (cond
+       ((eq 'python org-babel-python-mode) ; python.el
+	(unless py-buffer
+	  (setq py-buffer (org-babel-python-with-earmuffs session)))
+	(let ((python-shell-buffer-name
+	       (org-babel-python-without-earmuffs py-buffer)))
+	  (run-python cmd)
+          (with-current-buffer py-buffer
+            (add-hook
+             'python-shell-first-prompt-hook
+             (lambda ()
+               (setq-local org-babel-python--initialized t)
+               (message "I am running!!!"))
+             nil 'local))))
+       ((and (eq 'python-mode org-babel-python-mode)
+	     (fboundp 'py-shell)) ; python-mode.el
+	(require 'python-mode)
+	;; Make sure that py-which-bufname is initialized, as otherwise
+	;; it will be overwritten the first time a Python buffer is
+	;; created.
+	(py-choose-shell)
+	;; `py-shell' creates a buffer whose name is the value of
+	;; `py-which-bufname' with '*'s at the beginning and end
+	(let* ((bufname (if (and py-buffer (buffer-live-p py-buffer))
+			    (replace-regexp-in-string ;; zap surrounding *
+			     "^\\*\\([^*]+\\)\\*$" "\\1" py-buffer)
+			  (concat "Python-" (symbol-name session))))
+	       (py-which-bufname bufname))
+	  (setq py-buffer (org-babel-python-with-earmuffs bufname))
+	  (py-shell nil nil t org-babel-python-command py-buffer nil nil t nil)))
+       (t
+	(error "No function available for running an inferior Python")))
+      ;; Wait until Python initializes.
+      (if (eq 'python org-babel-python-mode) ; python.el
+          ;; This is more reliable compared to
+          ;; `org-babel-comint-wait-for-output' as python may emit
+          ;; multiple prompts during initialization.
+          (with-current-buffer py-buffer
+            (while (not org-babel-python--initialized)
+              (sleep-for 0 10)))
+        (org-babel-comint-wait-for-output py-buffer))
       (setq org-babel-python-buffers
 	    (cons (cons session py-buffer)
 		  (assq-delete-all session org-babel-python-buffers)))
